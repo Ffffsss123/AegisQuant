@@ -16,7 +16,7 @@ from binance_trader.ai_news import (AINewsError, MAX_RESPONSE_BYTES, ModelClient
 from binance_trader.news_risk import DRIVERS
 
 NOW=1791180000.0
-KEY='sk-synthetic-news-client-key-123456'
+KEY='fixture-only-model-key-never-a-real-credential'
 CONFIG={'base_url':'https://api.openai.com/v1','model':'configured-model','api_key':KEY}
 ARTICLE={'id':'article-1','url':'https://www.bbc.com/news/test','title':'Iran war update',
          'source':'BBC','origin':'BBC','published':NOW-60,

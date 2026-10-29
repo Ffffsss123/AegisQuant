@@ -1,5 +1,5 @@
 """Opt-in US/HK cash-stock execution. Separate ledgers, no live auto-start."""
-import argparse, fcntl, hashlib, json, os, sqlite3, time, tempfile
+import argparse, fcntl, hashlib, json, os, sqlite3, time, tempfile, threading
 from contextlib import contextmanager, ExitStack
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -198,10 +198,13 @@ def require_worker(root):
     """Orders require a live process holding the runner lock and a fresh lease."""
     folder=Path(root)/'data/trading/live'
     from .desktop_server import alive
+    from .validation import fingerprint,protection_passed
     try:
+        if not protection_passed(root):raise SafetyError('Current protection regression required before live submission')
         lease=read(folder/'heartbeat.json');stamp=datetime.fromisoformat(lease['time'])
         if stamp.tzinfo is None or not 0<=(datetime.now(timezone.utc)-stamp).total_seconds()<=30:
             raise SafetyError('Live maintenance heartbeat expired')
+        if lease.get('fingerprint')!=fingerprint(root):raise SafetyError('Live worker source changed; restart maintenance after validation')
         if not alive(lease['pid'],'-m trading.live_trading run'):raise SafetyError('Live maintenance worker is not running')
         with (folder/'runner.lock').open('a') as f:
             try:fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)
@@ -217,6 +220,8 @@ def require_worker(root):
 class Portfolio:
     def __init__(self,root,broker_factory=None):
         self.root=Path(root);self.folder=self.root/'data/trading/live'
+        from .validation import fingerprint
+        self.implementation_fingerprint=fingerprint(root)
         self.c,self.rates,self.digest=config(root,datetime.now(timezone.utc),allow_stale_fx=True)
         if broker_factory is None:
             from .live_broker import LiveBroker
@@ -266,7 +271,7 @@ class Portfolio:
             s['paused']=True;self.stores[m].save(s,'live_prepared_disabled')
         private_write(self.folder/'controls.json',dict(config_digest=self.digest,enabled=False,paused=True,
             stopped=False,loss_latched=False,bound_rates=self.rates,created_at=datetime.now(timezone.utc).isoformat()))
-    def refresh(self):
+    def refresh(self,allow_partial=False):
         states={};errors=[]
         for m,e in self.engines.items():
             try:
@@ -274,12 +279,17 @@ class Portfolio:
                 e.reconcile(s,datetime.now(timezone.utc))
                 # Deadline cancellations precede quotes and valuation, even on errors.
                 e.manage_orders(s,datetime.now(timezone.utc),reconciled=True)
-                e.mark(s,datetime.now(timezone.utc));states[m]=s
+                e.mark(s,datetime.now(timezone.utc))
+                if s.pop('live_maintenance_error',None) is not None:self.stores[m].save(s,'live_maintenance_recovered')
+                states[m]=s
             except Exception as exc:
                 errors.append(m+': '+str(exc))
-                if self.stores[m].exists():
-                    s=self.stores[m].load();e.alert(s,'Live maintenance: '+str(exc));states[m]=s
-        if errors:raise SafetyError('; '.join(errors))
+                try:
+                    if self.stores[m].exists():
+                        s=self.stores[m].load();s['live_maintenance_error']=str(exc)
+                        e.alert(s,'Live maintenance: '+str(exc));states[m]=s
+                except Exception:errors.append(m+': ledger unavailable; evidence retained')
+        if errors and not allow_partial:raise SafetyError('; '.join(errors))
         return states
     def aggregate(self,states,now):
         ctrl=self.controls();loss=0;slots=set();pending=False
@@ -301,11 +311,18 @@ class Portfolio:
             ctrl.update(loss_latched=True,paused=True);private_write(self.folder/'controls.json',ctrl)
             for m,s in states.items():self.engines[m].alert(s,'Joint live loss limit latched')
         return dict(loss_usd=loss,occupied_slots=len(slots),pending=pending)
+    def protection_current(self):
+        from .validation import fingerprint,protection_passed
+        return protection_passed(self.root) and fingerprint(self.root)==self.implementation_fingerprint
+    def require_protection(self):
+        if not self.protection_current():raise SafetyError('Code changed or protection validation missing; no new live submission')
     def transport_guard(self,side):
+        self.require_protection()
         require_worker(self.root);ctrl=self.controls()
         if not ctrl.get('enabled') or ctrl.get('stopped') or (side=='BUY' and (ctrl.get('paused') or ctrl.get('loss_latched'))):
             raise SafetyError('Live controls changed before transport')
     def guard(self,s,order,tag):
+        self.require_protection()
         require_worker(self.root)
         ctrl=self.controls();now=datetime.now(timezone.utc)
         if not ctrl.get('enabled') or ctrl.get('stopped'):raise SafetyError('Live execution is not armed')
@@ -326,8 +343,7 @@ class Portfolio:
         if confirmation!=CONFIRM:raise SafetyError('Type '+CONFIRM+' to enable real stock trading')
         config(self.root,datetime.now(timezone.utc))
         latch_path=self.folder/'pause.json';initial_latch=read(latch_path) if latch_path.exists() else None
-        from .validation import protection_passed
-        if not protection_passed(self.root):raise SafetyError('Current protection regression required')
+        self.require_protection()
         ctrl=self.controls()
         if ctrl.get('loss_latched') or ctrl.get('stopped'):raise SafetyError('Latched live stop/loss requires review; cannot clear here')
         for m in self.engines:simulation_evidence(self.root,m,datetime.now(timezone.utc))
@@ -352,33 +368,46 @@ class Portfolio:
             s=db.load();s['paused']=True
             if stop:s['stopped']=True
             db.save(s,'live_stop' if stop else 'live_pause')
-    def cycle(self):
-        ctrl=self.controls()
+    def cycle(self,allow_decisions=True):
+        ctrl=self.controls();issues=[]
         if ctrl.get('paused') or ctrl.get('stopped'):
             for m,db in self.stores.items():
                 state=db.load();state['paused']=True;state['stopped']=bool(ctrl.get('stopped') or state.get('stopped'))
                 db.save(state,'live_control_observed')
-        states=self.refresh();self.aggregate(states,datetime.now(timezone.utc))
+        states=self.refresh(allow_partial=True)
+        issues.extend(m+' maintenance unavailable' for m,s in states.items() if s.get('live_maintenance_error'))
+        if issues:pause_local(self.root)
+        try:self.aggregate(states,datetime.now(timezone.utc))
+        except (SafetyError,KeyError,ValueError):
+            pause_local(self.root);issues.append('Joint valuation unavailable; new buys paused')
         try:
             current,rates,digest=config(self.root,datetime.now(timezone.utc))
             if digest!=self.digest:raise SafetyError('Live configuration changed while running')
             self.c=current;self.rates=rates
         except (OSError,ValueError,KeyError,SafetyError):
-            pause_local(self.root);return  # Maintenance above continues without entry permission.
-        from .validation import protection_passed
-        if not ctrl.get('enabled') or ctrl.get('stopped') or not protection_passed(self.root):return
+            pause_local(self.root);issues.append('Entry configuration or FX unavailable')
+        if not self.protection_current():issues.append('Current protection regression or worker restart required')
+        if not allow_decisions or not ctrl.get('enabled') or self.controls().get('stopped') or not self.protection_current():
+            return dict(status='needs_attention' if issues else 'running',issues=issues)
         for m,e in self.engines.items():
+            if m not in states or states[m].get('live_maintenance_error'):continue
             path=self.root/('data/trading/market/scan.json' if m=='US' else 'data/trading/hk_market/scan.json')
-            scan=read(path) if path.exists() else {}
-            # Only the original daily trend engine is live-wired. The simulation
-            # swing/option engines are not promoted by this permission.
-            if not self.c['automatic_entries'] or self.controls().get('paused'):
-                scan=dict(scan,complete=False)
-            if m=='HK' and scan:
-                from .hk_signals import current_signals
-                try:current_signals(scan,e.b.calendar(e.b.now()),e.b.now())
-                except SafetyError:scan=dict(scan,complete=False)
-            e.tick(scan,datetime.now(timezone.utc));e.drain(scan,datetime.now(timezone.utc))
+            try:
+                scan=read(path) if path.exists() else {}
+                if m=='HK' and scan:
+                    from .hk_signals import current_signals
+                    try:current_signals(scan,e.b.calendar(e.b.now()),e.b.now())
+                    except (SafetyError,KeyError,ValueError):
+                        scan=dict(date=scan.get('date'),complete=False,signals={},candidates=[])
+                if not self.c['automatic_entries'] or self.controls().get('paused'):
+                    scan=dict(scan,complete=False)
+                # A different market's valuation fault blocks new buys but does
+                # not bypass or block this market's strict owned-position exit.
+                e.tick(scan,datetime.now(timezone.utc));e.drain(scan,datetime.now(timezone.utc))
+            except Exception as exc:
+                pause_local(self.root);state=self.stores[m].load()
+                e.alert(state,'Live execution: '+str(exc));issues.append(m+' execution unavailable')
+        return dict(status='needs_attention' if issues else 'running',issues=issues)
     def order(self,market,code,side,qty,limit,confirmation,request_id):
         import re
         if confirmation!='PLACE LIVE ORDER':raise SafetyError('Type PLACE LIVE ORDER to submit a real order')
@@ -386,8 +415,13 @@ class Portfolio:
             raise SafetyError('Invalid live ticket identity')
         ctrl=self.controls();digest=hashlib.sha256(json.dumps([market,code,side,qty,limit],sort_keys=True).encode()).hexdigest()
         if request_id in ctrl.get('requests',{}):raise SafetyError('Request already claimed; inspect orders, never resubmit')
-        states=self.refresh();self.aggregate(states,datetime.now(timezone.utc))
+        states=self.refresh(allow_partial=side=='SELL')
+        if side=='SELL' and (set(states)!=set(self.engines) or any(v.get('live_maintenance_error') for v in states.values())):
+            pause_local(self.root)
+        if side=='BUY':self.aggregate(states,datetime.now(timezone.utc))
+        if market not in states:raise SafetyError('Owned market ledger unavailable; inspect retained evidence')
         e=self.engines[market];s=states[market];now=datetime.now(timezone.utc)
+        if s.get('live_maintenance_error'):raise SafetyError('Owned market must reconcile before an exit')
         if side=='BUY':
             snapshot=read(self.root/('data/trading/market/scan.json' if market=='US' else 'data/trading/hk_market/scan.json'))
             session=e.b.execution_session(now,strict=False)
@@ -420,7 +454,7 @@ def pause_local(root,stop=False):
 
 
 def public_status(root):
-    """No account IDs, tickets or raw broker replies are returned to the GUI."""
+    """No account IDs, client request IDs or raw broker replies are returned to the GUI."""
     from .desktop_server import ledger
     folder=Path(root)/'data/trading/live'
     ctrl=read(folder/'controls.json') if (folder/'controls.json').exists() else {}
@@ -478,14 +512,32 @@ def execute(root,request,broker_factory=None):
             for db in p.stores.values():stack.enter_context(db.lock())
             if action=='prepare':p.bind()
             elif action=='enable':p.enable(request.get('confirmation'))
-            elif action=='maintain':p.cycle()
+            elif action=='maintain':return p.cycle(allow_decisions=False)
             else:p.order(request.get('market'),request.get('code'),request.get('side'),
                          request.get('qty'),request.get('limit'),request.get('confirmation'),request.get('request_id'))
 
 
+@contextmanager
+def worker_heartbeat(folder,interval=5,code_fingerprint=None):
+    """Process liveness is independent of SDK latency; risk freshness is separate."""
+    folder=Path(folder);stopped=threading.Event();errors=[]
+    def publish():
+        private_write(folder/'heartbeat.json',dict(pid=os.getpid(),time=datetime.now(timezone.utc).isoformat(),fingerprint=code_fingerprint))
+    publish()
+    def beat():
+        while not stopped.wait(interval):
+            try:publish()
+            except Exception:
+                # An expired lease prevents every subsequent physical submission.
+                errors.append(True);return
+    thread=threading.Thread(target=beat,name='live-worker-heartbeat',daemon=True);thread.start()
+    try:yield errors
+    finally:stopped.set();thread.join(timeout=1)
+
+
 def main(argv=None):
     parser=argparse.ArgumentParser(description='AegisQuant US/HK cash-stock live execution; disabled by default')
-    parser.add_argument('command',choices=['template','validate','refresh-fx','prepare','status','enable','pause','stop','run','request'])
+    parser.add_argument('command',choices=['template','validate','refresh-fx','prepare','status','enable','pause','stop','maintain','run','request'])
     parser.add_argument('--confirmation',default='');parser.add_argument('--request-file',type=Path)
     args=parser.parse_args(argv);root=Path(__file__).resolve().parents[1];folder=root/'data/trading/live'
     if args.command=='status':print(json.dumps(public_status(root),indent=2));return 0
@@ -497,20 +549,22 @@ def main(argv=None):
             if not read(folder/'controls.json').get('enabled'):raise SafetyError('Enable live stocks explicitly before starting a worker')
             portfolio=Portfolio(root)
             try:
-              while True:
-                try:
-                    private_write(folder/'heartbeat.json',dict(pid=os.getpid(),time=datetime.now(timezone.utc).isoformat()))
-                    with portfolio_lock(root),ExitStack() as stack:
-                        for db in portfolio.stores.values():stack.enter_context(db.lock())
-                        portfolio.cycle()
-                    write_report(root,'running','Live maintenance cycle completed; see ledgers for order state')
-                except BlockingIOError:pass  # User operation owns the portfolio lock.
-                except Exception:
-                    try:pause_local(root)
-                    except Exception:pass
-                    write_report(root,'needs_attention','Live entries paused. Inspect the private live worker log and ledger evidence.')
-                    import traceback;traceback.print_exc()
-                time.sleep(5)
+                with worker_heartbeat(folder,code_fingerprint=portfolio.implementation_fingerprint):
+                    while True:
+                        try:
+                            with portfolio_lock(root),ExitStack() as stack:
+                                for db in portfolio.stores.values():stack.enter_context(db.lock())
+                                result=portfolio.cycle()
+                            write_report(root,result['status'],
+                                'Live maintenance needs review; new buys paused. See private logs.' if result['issues']
+                                else 'Live maintenance cycle completed; see ledgers for order state')
+                        except BlockingIOError:pass
+                        except Exception:
+                            try:pause_local(root)
+                            except Exception:pass
+                            write_report(root,'needs_attention','Live entries paused. Inspect the private live worker log and ledger evidence.')
+                            import traceback;traceback.print_exc()
+                        time.sleep(5)
             finally:portfolio.close()
     request=dict(action=args.command.replace('-','_'),confirmation=args.confirmation)
     if args.command=='request':
@@ -518,7 +572,11 @@ def main(argv=None):
         if file is None or file.resolve().parent!=(folder/'requests').resolve():raise SafetyError('Invalid local request file')
         request=read(file)
     try:
-        execute(root,request);write_report(root,'completed','Live operation completed: '+request['action'])
+        result=execute(root,request)
+        if isinstance(result,dict) and result.get('status')=='needs_attention':
+            write_report(root,'needs_attention','Maintenance incomplete; new buys paused. Inspect private logs and per-market alerts.')
+            print('Maintenance needs attention; existing evidence and pauses retained.');return 1
+        write_report(root,'completed','Live operation completed: '+request['action'])
         print('Completed. Run status to inspect live state.');return 0
     except Exception:
         write_report(root,'needs_attention','Operation blocked. Check the private live-operation log; no automatic retry.')

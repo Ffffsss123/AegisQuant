@@ -30,6 +30,7 @@ class LiveFake(Fake):
         lot=1 if self.market=='US' else 100
         if not code.startswith(self.market+'.') or qty%lot:raise SafetyError('Wrong identity or board lot')
         return dict(lot=lot,snapshot={},checked_at=self.now().isoformat())
+    def mark(self,code,now):return 10 if self.market=='US' else 2
     def close(self):pass
 
 
@@ -143,6 +144,70 @@ class LivePortfolioTests(unittest.TestCase):
         with self.assertRaises(SafetyError):self.ticket()
         self.assertEqual(self.b['US'].calls,0)
 
+    def test_other_market_failure_allows_healthy_owned_manual_exit(self):
+        self.ticket();self.b['US'].fill(1,10);self.p.refresh()
+        with patch.object(self.p.engines['HK'],'mark',side_effect=SafetyError('HK valuation unavailable')):
+            self.ticket(side='SELL',key='b'*32)
+        self.assertEqual(self.b['US'].calls,2)
+        self.assertEqual(self.b['US'].remote[-1]['side'],'SELL')
+        self.assertTrue(self.p.controls()['paused'])
+    def test_other_market_failure_blocks_new_buy(self):
+        with patch.object(self.p.engines['HK'],'mark',side_effect=SafetyError('HK valuation unavailable')):
+            with self.assertRaises(SafetyError):self.ticket()
+        self.assertEqual(self.b['US'].calls,0)
+    def test_other_market_failure_does_not_block_automatic_owned_exit(self):
+        self.ticket();self.b['US'].fill(1,10);self.p.refresh()
+        file=self.root/'data/trading/market/scan.json';scan=json.loads(file.read_text())
+        scan['signals']['US.A']['sell']=True;private_write(file,scan)
+        with patch.object(self.p.engines['HK'],'mark',side_effect=SafetyError('HK valuation unavailable')):
+            result=self.p.cycle()
+        self.assertEqual(result['status'],'needs_attention')
+        self.assertEqual(self.b['US'].calls,2)
+        self.assertEqual(self.b['US'].remote[-1]['side'],'SELL')
+        self.assertTrue(self.p.controls()['paused'])
+    def test_other_market_failure_still_services_sixty_second_cancel(self):
+        self.ticket();s=self.p.stores['US'].load()
+        for o in s['orders'].values():o['created']=(datetime.now(timezone.utc)-timedelta(seconds=61)).isoformat()
+        self.p.stores['US'].save(s)
+        with patch.object(self.p.engines['HK'],'mark',side_effect=SafetyError('HK valuation unavailable')):
+            self.p.cycle()
+        self.assertEqual(self.b['US'].remote[0]['status'],'CANCELLED_ALL')
+        self.assertEqual(self.b['US'].calls,1)
+    def test_owned_market_failure_cannot_bypass_real_exit_checks(self):
+        self.ticket();self.b['US'].fill(1,10);self.p.refresh()
+        with patch.object(self.p.engines['US'],'mark',side_effect=SafetyError('Own quote invalid')):
+            with self.assertRaises(SafetyError):self.ticket(side='SELL',key='b'*32)
+        self.assertEqual(self.b['US'].calls,1)
+
+    def test_us_fault_does_not_block_healthy_hk_owned_exit(self):
+        with patch('trading.hk_metadata.execution_metadata',return_value=dict(lot_size=100,tick_size='.005')):
+            self.ticket('HK','HK.00001',qty=100,price=2,key='c'*32)
+            self.b['HK'].fill(100,2);self.p.refresh()
+            file=self.root/'data/trading/hk_market/scan.json';scan=json.loads(file.read_text())
+            scan['signals']['HK.00001']['sell']=True;private_write(file,scan)
+            with patch.object(self.p.engines['US'],'mark',side_effect=SafetyError('US valuation unavailable')),patch('trading.hk_signals.current_signals'):
+                result=self.p.cycle()
+        self.assertEqual(result['status'],'needs_attention')
+        self.assertEqual(self.b['HK'].calls,2)
+        self.assertEqual(self.b['HK'].remote[-1]['side'],'SELL')
+        self.assertEqual(self.b['US'].calls,0)
+
+    def test_single_reconcile_does_not_run_strategy_decisions_or_place_orders(self):
+        with patch.object(self.p.engines['US'],'tick') as tick,patch.object(self.p.engines['HK'],'drain') as drain:
+            self.p.cycle(allow_decisions=False)
+        tick.assert_not_called();drain.assert_not_called()
+        self.assertEqual(self.b['US'].calls,0);self.assertEqual(self.b['HK'].calls,0)
+
+    def test_manual_ticket_cannot_bypass_changed_or_missing_protection(self):
+        with patch('trading.validation.protection_passed',return_value=False):
+            with self.assertRaisesRegex(SafetyError,'protection validation'):self.ticket()
+        self.assertEqual(self.b['US'].calls,0)
+        self.assertEqual(self.p.stores['US'].load()['orders'],{})
+    def test_stale_in_memory_implementation_cannot_submit_after_source_change(self):
+        self.p.implementation_fingerprint='old-worker-source'
+        with self.assertRaisesRegex(SafetyError,'Code changed'):self.ticket()
+        self.assertEqual(self.b['US'].calls,0)
+
 
 class LiveEvidenceTests(unittest.TestCase):
     def test_current_empty_or_reset_simulator_is_not_live_evidence(self):
@@ -208,3 +273,26 @@ class LiveAdapterTests(unittest.TestCase):
         self.assertEqual(b.mark('US.A',b.now()),10)
         b.snapshots=lambda _:[dict(code='US.A',update_time=(b.now()-timedelta(days=3)).isoformat(),last_price=10)]
         with self.assertRaises(SafetyError):b.mark('US.A',b.now())
+
+
+class LiveHeartbeatTests(unittest.TestCase):
+    def test_heartbeat_runs_independently_of_a_blocked_maintenance_cycle(self):
+        import threading
+        from trading.live_trading import worker_heartbeat
+        updates=[];second_update=threading.Event()
+        def record(*args):
+            updates.append(args)
+            if len(updates)>=2:second_update.set()
+        with tempfile.TemporaryDirectory() as root,patch('trading.live_trading.private_write',side_effect=record):
+            with worker_heartbeat(root,interval=.02):
+                self.assertTrue(second_update.wait(1),'SDK latency must not stall the process-liveness lease')
+            self.assertGreaterEqual(len(updates),2)
+            self.assertFalse(any(t.name=='live-worker-heartbeat' for t in threading.enumerate()))
+
+
+class LiveMaintenanceReportingTests(unittest.TestCase):
+    def test_partial_failure_is_reported_as_attention_instead_of_completed(self):
+        from trading.live_trading import main
+        with patch('trading.live_trading.execute',return_value={'status':'needs_attention','issues':['HK maintenance unavailable']}),patch('trading.live_trading.write_report') as report,patch('builtins.print'):
+            self.assertEqual(main(['maintain']),1)
+        self.assertEqual(report.call_args.args[1],'needs_attention')

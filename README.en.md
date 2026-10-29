@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-An English-language securities console for **US and Hong Kong stocks, US options, and futures research**. It connects market data, news, screening, risk controls, simulation execution and reconciliation.
+An English-language securities console for **US and Hong Kong stocks, US options, and futures research**. It connects market data, news, screening, risk controls, simulation execution and reconciliation, with a separate opt-in live cash-stock path.
 
 ## Platforms and current scope
 
@@ -34,12 +34,15 @@ Strategy signals + news direction / risk filters
                   ↓
 Check budgets, positions, loss limits, and pause controls
                   ↓
-SIMULATE order execution
+Execution permission gate
+   SIMULATE (default) / separately armed REAL cash stocks
                   ↓
 Query orders → verify fills → update positions and ledgers
                   ↓
-Stop loss / take profit / trend reversal / time exit → reconcile
+Product-specific exits → verify fills → reconcile
 ```
+
+The simulation swing path has ATR stops, targets and time exits. The current live path uses daily-trend exits; enabling live stocks does not enable ATR swing, options or futures execution.
 
 1. **Start and recover:** load local configuration and persistent ledgers, then recover known orders and positions. Connecting an account, saving settings, or restoring credentials does not start new entries.
 2. **Collect and validate:** read quotes, closed candles, and news. Stale data, incomplete scans, unverified instruments, or abnormal account states block new entries.
@@ -80,6 +83,8 @@ Futures remain a research and integration-check area. Contract eligibility, mark
 ## Live stock enable and execution
 
 The English **Live Trading** page provides separate REAL account preparation, explicit enable, a manually started maintenance worker, and confirmed limit-order tickets for US/HK common stocks. Automatic daily-trend entries default to off. It uses separate native-currency ledgers, two joint stock slots, cash-only admission, loss latches, quote checks and durable unknown-order recovery. Options and futures remain disabled. This is implemented code tested with fake brokers; no REAL fill acceptance is claimed.
+
+The **Reconcile once** operation services reconciliation and due cancellations only; it never runs strategy decisions or places new orders. A fault in one market blocks new buys while healthy markets retain their own strictly validated exits.
 
 Follow the [step-by-step live guide](docs/live-trading.md) before any account operation. The live path uses the original daily-trend engine; the simulation ATR swing engine has not been promoted to live execution.
 
@@ -139,6 +144,10 @@ open AegisQuant.app
 The build produces `AegisQuant.app`. A normal launch connects the local backend and manages tasks according to local configuration. Configure simulation accounts and permissions first. Launching with `AEGIS_READ_ONLY=1` prevents this app from starting its backend or sending action requests; an existing status service is required to display data. Closing the window does not stop background processes.
 
 This sanitized source snapshot excludes runtime databases, balances, trade history, credentials, dependencies and built apps. Other separate tools retained in the repository do not participate in the securities console's connection or execution.
+
+## Verification
+
+The latest [repository review](docs/verification.md) records the checked scope, safety fixes and test results. These checks do not establish a successful REAL fill or profitability.
 
 ## Copyright, commercial use, and attribution / 版权、商业使用与来源标注
 

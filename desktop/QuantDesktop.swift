@@ -11,6 +11,13 @@ func number(_ x: Any?) -> Double { (x as? NSNumber)?.doubleValue ?? 0 }
 func list(_ x: Any?) -> [[String:Any]] { x as? [[String:Any]] ?? [] }
 func object(_ x: Any?) -> [String:Any] { x as? [String:Any] ?? [:] }
 func yes(_ x: Any?) -> Bool { x as? Bool ?? false }
+func liveStatus(_ value:Any?) -> String {
+    let state=object(value)
+    if yes(state["stopped"]) {return "STOP LATCHED"}
+    if yes(state["loss_latched"]) {return "LOSS LIMIT LATCHED"}
+    if !yes(state["enabled"]) {return "DISABLED"}
+    return yes(state["paused"]) ? "ARMED · ENTRIES PAUSED" : "ARMED"
+}
 func money(_ x: Any?) -> String { String(format:"%.2f",number(x)) }
 func dateValue(_ text: String) -> Date? {
     let f=ISO8601DateFormatter(); f.formatOptions=[.withInternetDateTime,.withFractionalSeconds]
@@ -133,7 +140,7 @@ struct MainView: View {
                 HStack(spacing:11){Image(systemName:"waveform.path").font(.title).foregroundStyle(mint);VStack(alignment:.leading,spacing:3){Text("AegisQuant").font(.system(size:17,weight:.bold));Text("LOCAL WORKSPACE").font(.system(size:8,weight:.medium)).tracking(2).foregroundStyle(muted)}}.padding(.top,22)
                 VStack(spacing:8){ForEach(Page.allCases,id:\.self){p in Button {page=p} label:{HStack(spacing:12){Image(systemName:p.icon).frame(width:20);Text(p.rawValue).font(.system(size:14,weight:.medium));Spacer();if page==p {Circle().fill(mint).frame(width:5,height:5)}}.padding(.horizontal,15).padding(.vertical,13).foregroundStyle(page==p ? mint:muted).background(page==p ? mint.opacity(0.09):.clear,in:RoundedRectangle(cornerRadius:10))}.buttonStyle(.plain)}}
                 Spacer()
-                VStack(alignment:.leading,spacing:12){Badge(text:m.readOnly ? "Read-only session" : (yes(object(m.data["live"])["enabled"]) ? "LIVE STOCKS ARMED" : "Live stocks disabled"),color:.orange);Text(yes(object(m.data["funding"])["shared_capital"]) ? "Stocks / options budget":"Capital plan").font(.caption).foregroundStyle(muted);Text(money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"])+" USD simulation budget").font(.system(size:13,weight:.medium));Text("Reserve: "+money(object(m.data["funding"])["reserve_usd"])+" USD").font(.caption).foregroundStyle(muted);Divider();HStack{Circle().fill(m.connected ? mint:.orange).frame(width:6,height:6);Text(m.connected ? "Local service connected":"Connecting to local service").font(.caption2).foregroundStyle(muted)}}.padding(.bottom,20)
+                VStack(alignment:.leading,spacing:12){Badge(text:m.readOnly ? "Read-only session" : "LIVE "+liveStatus(m.data["live"]),color:.orange);Text(yes(object(m.data["funding"])["shared_capital"]) ? "Stocks / options budget":"Capital plan").font(.caption).foregroundStyle(muted);Text(money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"])+" USD simulation budget").font(.system(size:13,weight:.medium));Text("Reserve: "+money(object(m.data["funding"])["reserve_usd"])+" USD").font(.caption).foregroundStyle(muted);Divider();HStack{Circle().fill(m.connected ? mint:.orange).frame(width:6,height:6);Text(m.connected ? "Local service connected":"Connecting to local service").font(.caption2).foregroundStyle(muted)}}.padding(.bottom,20)
             }.padding(.horizontal,20).frame(width:210).background(Color.black.opacity(0.20))
             VStack(spacing:0){
                 HStack{VStack(alignment:.leading,spacing:7){Text(page.rawValue).font(.system(size:29,weight:.semibold));Text(page.subtitle).font(.system(size:13)).foregroundStyle(muted)};Spacer();VStack(alignment:.trailing,spacing:8){Button {m.refresh()} label:{Label("Refresh",systemImage:"arrow.clockwise")}.buttonStyle(.bordered);Text("Updated "+localTime(m.data["updated_at"])).font(.caption2).foregroundStyle(muted)}}.padding(30)
@@ -354,7 +361,7 @@ struct MainView: View {
         return VStack(alignment:.leading,spacing:20){
             Box {
                 HStack {Text("Live cash-stock execution").font(.title2.weight(.semibold));Spacer();
-                    Badge(text:yes(live["enabled"]) ? (yes(live["paused"]) ? "ARMED · ENTRIES PAUSED":"ARMED") : "DISABLED",color:.orange)}
+                    Badge(text:liveStatus(live),color:.orange)}
                 Badge(text:m.running("live_runner") ? "WORKER RUNNING":"WORKER OFFLINE",color:m.running("live_runner") ? mint:.orange)
                 Text("Real-money US and HK common stocks only. Options and futures remain disabled. Simulation accounts, budgets and controls are separate.").foregroundStyle(muted)
                 Text("Combined limit: 2 stock symbols, including pending buys. Cash only; no borrowing, deposits or currency conversion. USD 390 reserve stays untouched.").font(.callout).foregroundStyle(muted)

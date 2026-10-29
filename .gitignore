@@ -14,8 +14,6 @@ reports/
 *.sqlite-shm
 *.sqlite.lock
 
-量化控制台.app/
-商品策略交易器.app/
 
 .env.*
 !.env.example
@@ -25,7 +23,5 @@ reports/
 
 # Local securities and optional model configuration
 /data-local-config.json
-.env.*
-!.env.example
 
 *.app/

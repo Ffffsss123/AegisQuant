@@ -14,6 +14,8 @@ The English console now includes **Live Trading** for US and Hong Kong **cash co
 - Optional automatic entries use the original **daily long-trend engine**, with completed prior-session signals and news filtering. This is **not** the simulation's 1–5 day ATR swing engine. The ATR swing, option and futures execution paths have not been promoted to live use. The daily engine checks trend exits; it does not provide an exchange-hosted stop or ATR stop-loss order.
 - Automatic entries default to **false**. With a running worker, explicit limit-order tickets are supported independently; new buys still require an eligible completed-scan long signal, common-stock identity, fresh quotes, news and all portfolio risk checks. The worker manages existing strategy-owned positions and trend exits. The original daily engine makes one decision per market session; US automatic decisions use its 09:35–09:40 New York window. This is not a continuously evaluated intraday strategy.
 
+The screenshots are actual captures of the English application using a read-only local status service. `DISABLED` and `WORKER OFFLINE` are intentional capture states, not successful live execution evidence. Their sidebar USD 1,500 belongs to simulation and is not a live allocation.
+
 ## 1. Prepare a local configuration
 
 Install the dependencies and verify your chosen securities adapter as described in the [adapter guide](broker-adapters.md). The included adapter requires its matching local gateway and a supported securities entity; it is not an arbitrary broker REST endpoint. Broker API permissions and market data entitlements must cover your accounts and markets.
@@ -49,7 +51,7 @@ Each configured market must have its own natural simulation buy/sell round trip,
 .venv/bin/python -m trading.live_trading status
 ```
 
-`validate` runs the protection tests and records a fingerprint only if the tests pass and the source remains unchanged. `refresh-fx` reads the ECB's public reference; this is accounting data, not an FX transaction. Refresh HK identity/classification/calendar data through the existing HK data tools as well. Missing, stale or unverified data blocks the relevant operation.
+`validate` runs the protection tests and records a fingerprint only if the tests pass and the source remains unchanged. New live submissions recheck this fingerprint and the running worker's implementation. After updating code, pause buys, inspect and reconcile any pending orders, validate the new source and perform a controlled maintenance-worker restart; never reset the ledgers. `refresh-fx` reads the ECB's public reference; this is accounting data, not an FX transaction. Refresh HK identity/classification/calendar data through the existing HK data tools as well. Missing, stale or unverified data blocks the relevant operation.
 
 `prepare` queries the explicitly chosen REAL accounts, checks existing orders and settled native cash, and creates **paused, disabled** live ledgers. It does not place orders, start a worker or enable products. An existing manual position remains outside strategy ownership.
 
@@ -89,8 +91,11 @@ Every ticket has an immutable request ID, and every order has a durable intent a
 - **Pause live buys** immediately saves a local pause latch without waiting for the gateway. A running worker continues owned-position exits, cancellation and reconciliation. A later explicit enable can resume a clean manual pause; it cannot silently erase unresolved alerts or a loss/stop latch.
 - **Latch live stop** blocks all new order submissions, including automatic exits. The running worker still attempts cancellation and reconciliation. Remaining positions require manual attention; this does not promise liquidation.
 - Outstanding strategy orders become due for cancellation after **60 seconds**. The worker checks every 5 seconds, prioritizing reconciliation/cancellation before quote-dependent decisions. Network outages or provider limits can delay acknowledgment; a local cancellation request does not establish a canceled order.
+- **Reconcile once** (CLI: `.venv/bin/python -m trading.live_trading maintain`) queries and reconciles known orders and services due cancellations. It does not run strategy decisions or place new orders.
+- A market-specific reconciliation or valuation failure blocks new buys but does not prevent another healthy market from servicing its own due cancellations and strictly validated owned-position exits. An unhealthy market cannot bypass its own account, quote, fee or ownership checks.
+- The process-liveness heartbeat runs separately from slow SDK calls. Fresh valuations, quotes and account reconciliation remain independent admission requirements; a live heartbeat alone never authorizes an order.
 - Stale HK accounting FX blocks new entries while native-currency maintenance continues. A loss latch, unknown order, configuration mismatch, failed reconciliation or outstanding alert must be investigated; there is no generic “clear all errors” bypass.
-- Local stops and trend exits depend on the running computer, network and gateway. Closing the console window does not stop an already running worker. A stopped computer cannot manage orders or positions; inspect the broker account directly when service is unavailable.
+- Trend exits depend on the running computer, network and gateway. Closing the console window does not stop an already running worker. A stopped computer cannot manage orders or positions; inspect the broker account directly when service is unavailable.
 
 Inspect `data/trading/live/{us,hk}.sqlite`, `report.json`, and the private `data/desktop/live_*.log` files. Raw broker responses and state transitions are retained locally. Do not publish these records or credentials. The desktop status projection omits account IDs and raw broker replies.
 
