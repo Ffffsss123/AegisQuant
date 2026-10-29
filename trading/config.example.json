@@ -1,0 +1,11 @@
+{
+  "budget_nzd": 1000,
+  "loss_limit_nzd": 50,
+  "option_cap_nzd": 25,
+  "allocation": 0.45,
+  "max_positions": 2,
+  "fee_reserve_usd": 3,
+  "option_fee_reserve_usd": 5,
+  "live_stocks": false,
+  "live_options": false
+}
