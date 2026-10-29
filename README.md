@@ -2,13 +2,18 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-Quantitative research, simulation, and macOS desktop tools for US stocks, Hong Kong stocks, US options, and Binance commodity contracts. The system connects market data, news, strategy signals, position sizing, order execution, and ledger reconciliation. This public source snapshot does not establish live-trading readiness or successful broker execution acceptance, and does not promise returns.
+Quantitative research and simulation for **US and Hong Kong stocks, US options, and futures research**. The core system connects market data, news, screening, risk controls, simulated order execution, and reconciliation.
 
-## Application preview
+## Market coverage
 
-![AegisQuant local simulation workspace](docs/images/strategy-workspace-simulation.png)
+| Market | Current scope |
+| --- | --- |
+| US stocks | Screening, long-only swing simulation, risk controls, and broker reconciliation |
+| Hong Kong stocks | Calendar-aware scanning, board-lot/tick validation, simulation execution, and reconciliation |
+| US options | Contract research and explicit SIMULATE order-transport acceptance |
+| Futures | Research and connectivity/capability checks; execution capability and budget are not verified, so automated futures execution is not enabled |
 
-Actual English application interface captured on October 29, 2026, in an isolated, paused simulation preview without an account connection or market-data feed. The displayed 300 USDT is simulated starting equity. No live orders or model-provider requests were made for this preview.
+This public source snapshot does not establish live-trading readiness, completed broker execution acceptance, or profitability. The separate `binance_trader/` directory contains an optional commodity-contract tool; its interface is not the US/HK securities console.
 
 ## Runtime workflow
 
@@ -43,7 +48,7 @@ Each channel has its own configuration, account state, and execution safeguards.
 - A long-only short-term swing framework checks the underlying trend, liquidity, and a breakout above the previous five sessions' highs using completed daily data.
 - An optional volatile-trend filter ranks candidates using ATR percentage and trend efficiency. Complete scans and qualified historical data are required for entry.
 - Position size accounts for available capital, planned stop distance, fees, and slippage reserves.
-- The swing model uses an initial stop distance of `1.5 × ATR14` and a target distance of `3 × ATR14`. Exit checks cover stops, targets, trend reversal, and a maximum five-session holding period near the close.
+- The swing model uses an initial stop distance of `1.5 × ATR14` and a target distance of `3 × ATR14`. Exit checks cover stops, targets, trend reversal, and a time-exit request near the close once five sessions have been held (execution and a flat position still require confirmation).
 - Execution rechecks fresh two-sided quotes, limit prices, market calendars, news, and joint-account risk. Expired-order cancellation and existing-position exits take priority over new entries.
 
 ### Hong Kong stocks
@@ -58,17 +63,9 @@ Each channel has its own configuration, account state, and execution safeguards.
 - Its sequence is `cancellation test → cancellation confirmation → buy → buy confirmation → sell → sell confirmation → full reconciliation`.
 - Contracts, quotes, independent budgets, and positions are revalidated. Unfilled or unknown orders do not count as success and must not trigger blind replacement orders.
 
-### Binance commodity contracts
+### Futures research
 
-- The source allows gold, silver, WTI crude, Brent crude, and natural gas contracts, with one enabled instrument and one position at a time. Unsupported exchange products are rejected.
-- Signals use closed candles, `EMA20 / EMA60` trend checks, and breakouts of the previous 20 candles' highs or lows. New entries are evaluated only within the configured post-close window.
-- When verified news provides a direction, the breakout must agree. A candle-only fallback requires healthy news collection and explicit fallback permission; missing news or a blocking risk does not grant that permission.
-- An enabled AI direction is an additional filter. Healthy news, risk checks, and a matching closed-candle breakout remain required; model prose cannot place an order by itself.
-- Initial stop distance is the greater of `2 × ATR14` and `1%` of price. Trades with a stop distance above `8%` are skipped; the target distance is twice the stop distance. The strategy does not average down to replace a stop.
-- Sizing incorporates planned loss, fees, slippage, funding, margin, leverage, and exchange quantity increments. Daily or cumulative loss limits lock new entries.
-- The same candle cannot repeatedly open positions. Unknown orders create a persistent lock. Demo and live fills, protective orders, exits, and remote positions require verification; local simulation cannot reproduce a complete order book or real liquidation paths.
-
-The application interface, macOS menus, and confirmation dialogs use English by default. AI news explanations default to English; chat can follow an explicitly requested language. Source quotations and user messages retain their original language.
+Futures remain a research and integration-check area. Contract eligibility, market-data access, multiplier, tick size, margin, fees, trading calendar, execution capability, and an independent budget must be verified before any executable strategy can be considered. This repository does not claim an enabled or accepted US/HK futures execution flow. The Binance commodity tool is a separate implementation and is not evidence of futures readiness for the securities system.
 
 ## Layout and setup
 
@@ -76,20 +73,35 @@ The application interface, macOS menus, and confirmation dialogs use English by 
 | --- | --- |
 | `trading/` | US/HK equities and options data, scanning, simulation, reconciliation, and risk controls |
 | `binance_trader/` | Binance backend, strategy, news, AI filters, and browser interface |
-| `desktop/` | macOS console source and build scripts |
+| `desktop/` | Separate US/HK macOS console (Chinese interface) |
+| `binance_trader/desktop/` | Binance macOS launcher, Keychain helper, and build script |
 | `tests/`, `binance_trader/tests/` | Regression tests |
 | `examples/` | Synthetic demonstration data |
 | Top-level Python scripts | Connection diagnostics, backtests, validation, and return reports |
 
+### Start with the US/HK tools
+
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-
-# Check local simulation mode and configuration before starting.
-.venv/bin/python -m binance_trader
+.venv/bin/python trade.py doctor
 ```
 
-The Binance interface defaults to `http://127.0.0.1:8766`; see the [Binance tool guide (Chinese)](binance_trader/README.md). US/HK broker integration requires official OpenD software and appropriate account/data permissions. See `trading/config.example.json`. Begin with simulation and read-only diagnostics; live execution requires separate explicit configuration and actions.
+Install and sign in to official OpenD separately. Appropriate market-data and account permissions are required. Review `trading/config.example.json`; configure your own local simulation environment before running strategy commands. `doctor` performs diagnostics and does not start an automated strategy. Public clones do not include the original ledgers, account bindings, or runtime acceptance evidence.
+
+### macOS securities console
+
+On macOS with Apple's Command Line Tools installed:
+
+```sh
+zsh desktop/build.sh
+```
+
+This builds `量化控制台.app`, the US/HK securities console. Its current interface is Chinese. The recently added English interface belongs to the separate Binance tool and must not be presented as an English securities/futures console. Built applications are not included in this repository.
+
+### Optional separate Binance tool
+
+See [the Binance tool guide](binance_trader/README.md). It uses `binance_trader/requirements.txt`, its own data directory, and separate execution permissions. It is not required to use the US/HK research and simulation tools.
 
 This is a sanitized source snapshot. Runtime databases, balances, trade history, credentials, local reports, dependencies, and built application bundles are excluded. Simulated account bindings in deployment code and its tests use example IDs `000001` (US) and `000002` (HK). Configure and validate your own bindings before deployment.
 
@@ -115,7 +127,6 @@ Identify modified versions as modified and do not imply the author's endorsement
 
 ### 简体中文
 
-
 **Copyright © 2026 Ffffsss123。保留所有权利；使用许可仅按本仓库 [LICENSE](LICENSE) 授予。** 本声明适用于作者有权授权的原创部分，第三方组件仍遵循各自许可。
 
 允许个人使用、学习、修改、二次开发、商业使用及盈利，但上述使用均必须明确注明原作者和本仓库来源。商业产品、收费服务、量化交易盈利使用、个人改写、转载、复制或分发均不得删除或隐瞒来源，也不得把原作者的作品冒充为完全独立原创。
@@ -123,7 +134,9 @@ Identify modified versions as modified and do not imply the author's endorsement
 请保留以下声明及可访问的原仓库链接：
 
 > 本项目基于 Ffffsss123 的 AegisQuant 项目开发或使用。
+>
 > 原始仓库：https://github.com/Ffffsss123/AegisQuant
+>
 > Copyright © 2026 Ffffsss123。使用须遵守原仓库 LICENSE。
 
 对外提供软件或服务时，请在 README / 使用文档及用户可查看的“关于 / 版权 / 致谢”页面保留该声明；分发源码时，还须保留版权和 LICENSE。个人自用或仅用于自身交易盈利且不对外分发时，应在所使用副本的 README 或等效项目说明中保留声明，不要求公开交易记录。
