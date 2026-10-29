@@ -200,10 +200,10 @@ def server_for(engine, port, readonly=None, analysis=None, runtime=None, chat=No
                         snapshot = {"kline":{}, "news":{}}
                     snapshot.update(context_id=generation, context_mode=mode)
                 self.send(200, snapshot)
-            elif self.path in ("/", "/app.js", "/chatgpt.js", "/style.css"):
+            elif self.path in ("/", "/app.js", "/chatgpt.js", "/i18n.js", "/style.css"):
                 name = "index.html" if self.path == "/" else self.path[1:]
                 body = (ROOT/"static"/name).read_bytes().replace(b"__TOKEN__", token.encode())
-                mime = {"index.html": "text/html", "app.js": "text/javascript", "chatgpt.js": "text/javascript", "style.css": "text/css"}[name]
+                mime = {"index.html": "text/html", "app.js": "text/javascript", "chatgpt.js": "text/javascript", "i18n.js": "text/javascript", "style.css": "text/css"}[name]
                 self.send(200, body, mime+"; charset=utf-8")
             else:
                 self.send(404, {"error": "不存在"})

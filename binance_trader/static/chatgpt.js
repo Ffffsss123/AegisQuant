@@ -82,7 +82,7 @@
     const meta=document.createElement('p');meta.className='muted';
     const labels={preparing:'正在整理五品种资料',running:'正在分析 · 尚未完成',complete:'分析已完成',error:'未完成',cancelled:'已停止接收'};
     meta.textContent=(t.actual_model||t.model)+' · '+(labels[t.status]||t.status)+(t.context?' · 快照 '+new Date(t.context.asof_utc).toLocaleString():'')+(t.elapsed_ms?' · '+(t.elapsed_ms/1000).toFixed(1)+'秒':'');article.append(meta);
-    const answer=document.createElement('div');answer.className='chatgpt-answer';answer.innerHTML=markdown(t.answer||'正在准备…');article.append(answer);
+    const answer=document.createElement('div');answer.className='chatgpt-answer';answer.innerHTML=markdown(t.answer||'Preparing…');article.append(answer);
     if(t.error){const p=document.createElement('p');p.className='chatgpt-error';p.textContent=t.error;article.append(p);}
     if(t.context){const p=document.createElement('p');p.className='muted';p.textContent='已附 '+t.context.symbols.length+' 个品种 · '+t.context.articles+' 篇去重新闻 · '+t.context.metrics+' 项去重统计。';article.append(p);}
     for(const c of t.citations||[]){const url=safeURL(c.url);if(!url)continue;const link=document.createElement('a');link.href=url;link.rel='noreferrer noopener';link.className='chatgpt-link';link.textContent=c.title||'查看来源';article.append(link);}

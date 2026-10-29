@@ -26,8 +26,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>CommodityTrader</string>
 <key>CFBundleIdentifier</key><string>local.frank.commoditytrader</string>
-<key>CFBundleName</key><string>商品策略交易器</string>
-<key>CFBundleDisplayName</key><string>商品策略交易器</string>
+<key>CFBundleName</key><string>AegisQuant</string>
+<key>CFBundleDisplayName</key><string>AegisQuant</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>1.0.0</string>
 <key>NSHighResolutionCapable</key><true/>

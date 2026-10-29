@@ -42,7 +42,7 @@ def migration_server(directory, port, store=None, client_factory=Binance, model_
         def do_GET(self):
             if not self.host(): return
             if self.path == '/api/status': self.send(200, store.status()); return
-            names={'/':('credential_migration.html','text/html'),'/migration.js':('credential_migration.js','text/javascript'),'/style.css':('style.css','text/css')}
+            names={'/i18n.js':('i18n.js','text/javascript'),'/':('credential_migration.html','text/html'),'/migration.js':('credential_migration.js','text/javascript'),'/style.css':('style.css','text/css')}
             if self.path not in names: self.send(404, {'error':'不存在'}); return
             name,mime=names[self.path]
             self.send(200,(root/name).read_bytes().replace(b'__TOKEN__',token.encode()),mime)

@@ -165,7 +165,7 @@ $('resolve-pending').onclick=async()=>{
 $('close').onclick=async()=>{
  const context=requestContext(),position=latest?.state.position;if(!position)return;
  const live=context.context_mode==='live';
- if(!await askConfirmation(live?'确认停止策略并平掉实盘持仓？':'停止自动开仓并平掉本程序持仓？',{details:live?`${position.symbol} · ${position.side==='BUY'?'多仓':'空仓'} · 数量 ${fmt(position.quantity,5)}。将向币安正式账户发送只减仓平仓请求，成交会产生真实盈亏和费用。`:'',label:live?'确认实盘平仓':'确认平仓'}))return;
+ if(!await askConfirmation(live?'确认停止策略并平掉实盘持仓？':'停止自动开仓并平掉本程序持仓？',{details:live?`${position.symbol} · ${position.side==='BUY'?'Long position':'Short position'} · 数量 ${fmt(position.quantity,5)}。将向币安正式账户发送只减仓平仓请求，成交会产生真实盈亏和费用。`:'',label:live?'确认实盘平仓':'确认平仓'}))return;
  if(await post('close',{...context,confirm_live:live,expected_symbol:position.symbol,expected_position_id:position.id}))toast('平仓请求已处理，请核对持仓状态');
 };
 $('apply-leverage').onclick=async()=>{

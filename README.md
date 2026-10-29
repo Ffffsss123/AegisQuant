@@ -8,7 +8,7 @@ Quantitative research, simulation, and macOS desktop tools for US stocks, Hong K
 
 ![AegisQuant local simulation workspace](docs/images/strategy-workspace-simulation.png)
 
-English-language UI preview translated from a local simulation screenshot captured on October 4, 2026. It illustrates the price chart, risk controls, and strategy settings; the English labels are a presentation translation. The displayed 300 USDT is a simulated starting balance, not a live account or current execution status.
+Actual English application interface captured on October 29, 2026, in an isolated, paused simulation preview without an account connection or market-data feed. The displayed 300 USDT is simulated starting equity. No live orders or model-provider requests were made for this preview.
 
 ## Runtime workflow
 
@@ -67,6 +67,8 @@ Each channel has its own configuration, account state, and execution safeguards.
 - Initial stop distance is the greater of `2 × ATR14` and `1%` of price. Trades with a stop distance above `8%` are skipped; the target distance is twice the stop distance. The strategy does not average down to replace a stop.
 - Sizing incorporates planned loss, fees, slippage, funding, margin, leverage, and exchange quantity increments. Daily or cumulative loss limits lock new entries.
 - The same candle cannot repeatedly open positions. Unknown orders create a persistent lock. Demo and live fills, protective orders, exits, and remote positions require verification; local simulation cannot reproduce a complete order book or real liquidation paths.
+
+The application interface, macOS menus, and confirmation dialogs use English by default. AI news explanations default to English; chat can follow an explicitly requested language. Source quotations and user messages retain their original language.
 
 ## Layout and setup
 

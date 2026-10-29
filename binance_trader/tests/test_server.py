@@ -32,6 +32,14 @@ class ServerTests(unittest.TestCase):
         c.request(method,path,body=body,headers=headers or {})
         r=c.getresponse();result=(r.status,r.read(),dict(r.getheaders()));c.close()
         return result
+    def test_english_presentation_asset_is_served_without_weakening_origin_controls(self):
+        status,body,headers=self.request('/i18n.js')
+        self.assertEqual(status,200)
+        self.assertIn('text/javascript',headers['Content-Type'])
+        self.assertIn(b'AegisI18n',body)
+        self.assertIn(b"script-src 'self'",headers['Content-Security-Policy'].encode())
+        self.assertEqual(self.request('/i18n.js',headers={'Host':'evil.example'})[0],403)
+
     def test_loopback_host_and_cross_origin_rejected(self):
         status,_,_=self.request(headers={"Host":"evil.example"})
         self.assertEqual(status,403)

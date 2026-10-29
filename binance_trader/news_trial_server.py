@@ -125,6 +125,7 @@ def make_server(session, port=8767):
             if self.path == '/api/report':
                 return self.send(200,session.snapshot().get('report'))
             files = {'/':('news_trial.html','text/html; charset=utf-8'),
+                     '/i18n.js':('i18n.js','text/javascript; charset=utf-8'),
                      '/trial.js':('news_trial.js','text/javascript; charset=utf-8'),
                      '/style.css':('style.css','text/css; charset=utf-8')}
             if self.path not in files: return self.send(404,{'error':'不存在'})
