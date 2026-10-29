@@ -34,7 +34,7 @@ Strategy signals + news direction / risk filters
                   ↓
 Check budgets, positions, loss limits, and pause controls
                   ↓
-Simulation or an explicitly enabled execution channel
+SIMULATE order execution
                   ↓
 Query orders → verify fills → update positions and ledgers
                   ↓
