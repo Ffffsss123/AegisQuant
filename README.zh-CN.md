@@ -8,7 +8,7 @@
 
 ![AegisQuant local simulation workspace](docs/images/strategy-workspace-simulation.png)
 
-2026 年 10 月 4 日的本地模拟工作台截图，展示行情图、风控和策略设置。图中 300 USDT 为模拟初始资金，不是真实账户余额，也不代表当前执行状态。
+基于 2026 年 10 月 4 日本地模拟工作台截图翻译的英文界面预览，展示行情图、风控和策略设置；英文标签用于展示翻译。图中 300 USDT 为模拟初始资金，不是真实账户余额，也不代表当前执行状态。
 
 ## 基本运行逻辑
 

@@ -8,7 +8,7 @@ Quantitative research, simulation, and macOS desktop tools for US stocks, Hong K
 
 ![AegisQuant local simulation workspace](docs/images/strategy-workspace-simulation.png)
 
-Local simulation workspace captured on October 4, 2026, showing the price chart, risk controls, and strategy settings. The displayed 300 USDT is a simulated starting balance; this image is not a live account or a current execution status.
+English-language UI preview translated from a local simulation screenshot captured on October 4, 2026. It illustrates the price chart, risk controls, and strategy settings; the English labels are a presentation translation. The displayed 300 USDT is a simulated starting balance, not a live account or current execution status.
 
 ## Runtime workflow
 
