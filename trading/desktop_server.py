@@ -1,4 +1,4 @@
-"""Loopback-only API for native macOS UI. Fixed commands; no real trading control."""
+"""Loopback-only API for native macOS UI. Fixed simulation commands and separately armed live-stock control."""
 import json,os,secrets,sqlite3,subprocess,threading,time,fcntl
 from contextlib import contextmanager
 from pathlib import Path
@@ -9,7 +9,7 @@ from .policy import Config
 from .market_capabilities import market_capabilities
 
 ROOT=Path(__file__).resolve().parents[1];DATA=ROOT/'data/desktop';PYTHON=ROOT/'.venv/bin/python'
-COMMANDS={'hk_execution':['-m','trading.hk_execution'],'hk_scan':['-m','trading.hk_scan'],'hk_catalog':['-m','trading.hk_catalog'],'option_transport':['-m','trading.option_transport'],'options':['-m','trading.options_observer'],'scan':['-m','trading.prepare_scan'],'news':['-m','trading.desktop_news'],
+COMMANDS={'live_runner':['-m','trading.live_trading','run'],'live_operation':['-m','trading.live_trading','request'],'hk_execution':['-m','trading.hk_execution'],'hk_scan':['-m','trading.hk_scan'],'hk_catalog':['-m','trading.hk_catalog'],'option_transport':['-m','trading.option_transport'],'options':['-m','trading.options_observer'],'scan':['-m','trading.prepare_scan'],'news':['-m','trading.desktop_news'],
           'probe':['-m','trading.desktop_worker','probe'],'pause':['-m','trading.desktop_worker','pause'],
           'account':['-m','trading.desktop_worker','account'],
           'strategy':['-m','trading.paper_strategy'],'automation':['-m','trading.automation'],
@@ -58,12 +58,16 @@ class Controller:
         if key not in COMMANDS:raise ValueError('Unsupported action')
         with self.lock,jobs_lock():
             if self.running(key):return '任务已经运行，没有重复启动'
+            if key=='live_operation':raise ValueError('Use the scoped live operation endpoint')
+            if key=='live_runner':
+                from .live_trading import public_status
+                if not public_status(ROOT).get('enabled'):raise ValueError('Explicit live stock enable required')
             if key=='probe':
                 s=ledger(ROOT/'data/trading/probe.sqlite')
                 if s.get('env')!='SIMULATE':raise ValueError('尚未绑定模拟验收账户')
                 if s.get('probe_phase')=='complete':return '模拟接口验收已完成'
             # All state controlled from this app is restricted to SIMULATE.
-            for name in (() if key=='news' else ('paper.sqlite','probe.sqlite')):
+            for name in (() if key in ('news','live_runner') else ('paper.sqlite','probe.sqlite')):
                 s=ledger(ROOT/'data/trading'/name)
                 if s and s.get('env')!='SIMULATE':raise ValueError('检测到真实账户账本；图形界面不会启动该账户')
             log=(DATA/(key+'.log')).open('a')
@@ -72,8 +76,33 @@ class Controller:
             if isinstance(self.jobs[key].pid,int):
                 saved=read_json(DATA/'jobs.json');saved[key]={'pid':self.jobs[key].pid}
                 tmp=DATA/'jobs.tmp';tmp.write_text(json.dumps(saved));tmp.replace(DATA/'jobs.json')
-            self.last_message={'hk_execution':'港股模拟执行协调已启动','hk_scan':'港股行情扫描已启动','hk_catalog':'港股证券目录刷新已启动','option_transport':'期权券商模拟接口验收已启动','options':'期权真实报价纸面模拟已启动','scan':'行情扫描已启动','news':'新闻监测已启动','probe':'模拟验收已启动，请留意状态与错误','pause':'正在暂停模拟开仓并尝试撤单，请等待结果','account':'正在只读刷新真实账户','strategy':'策略模拟正在检查账户并启动','automation':'每日扫描与模拟衔接已启动','stop':'已保存停止指令，正在核对撤单'}[key]
+            self.last_message={'live_runner':'Live stock worker started explicitly; inspect Live Trading status','hk_execution':'港股模拟执行协调已启动','hk_scan':'港股行情扫描已启动','hk_catalog':'港股证券目录刷新已启动','option_transport':'期权券商模拟接口验收已启动','options':'期权真实报价纸面模拟已启动','scan':'行情扫描已启动','news':'新闻监测已启动','probe':'模拟验收已启动，请留意状态与错误','pause':'正在暂停模拟开仓并尝试撤单，请等待结果','account':'正在只读刷新真实账户','strategy':'策略模拟正在检查账户并启动','automation':'每日扫描与模拟衔接已启动','stop':'已保存停止指令，正在核对撤单'}[key]
             return self.last_message
+    def live_action(self,payload):
+        from .live_trading import private_write,pause_local
+        action=payload.get('action')
+        if action=='start':return self.start('live_runner')
+        if action in ('pause','stop'):
+            pause_local(ROOT,action=='stop')
+            return 'Live pause saved locally; running worker continues cancellation and reconciliation'
+        if action not in ('template','validate','refresh_fx','prepare','enable','order','maintain'):
+            raise ValueError('Unsupported live action')
+        allowed={'action','confirmation','market','code','side','qty','limit','request_id'}
+        if set(payload)-allowed:raise ValueError('Unexpected live request fields')
+        import uuid
+        with self.lock,jobs_lock():
+            if self.running('live_operation'):raise ValueError('Live operation already running; inspect status before retry')
+            file=ROOT/'data/trading/live/requests'/(uuid.uuid4().hex+'.json')
+            private_write(file,payload)
+            log=(DATA/'live_operation.log').open('a');os.chmod(DATA/'live_operation.log',0o600)
+            try:
+                child=subprocess.Popen([str(PYTHON),*COMMANDS['live_operation'],'--request-file',str(file)],
+                    cwd=str(ROOT),stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+            finally:log.close()
+            self.jobs['live_operation']=child
+            saved=read_json(DATA/'jobs.json');saved['live_operation']={'pid':child.pid}
+            private_write(DATA/'jobs.json',saved)
+            return 'Live operation queued: '+action+'. Inspect status; never assume a fill from this response.'
     def supervise_news(self,stop):
         # Only public news starts automatically; scanning and orders remain explicit.
         while not stop.is_set():
@@ -166,11 +195,15 @@ class Controller:
         errors=[]
         for key,p in self.jobs.items():
             if p.poll() not in (None,0):
+                if key.startswith('live_'):
+                    errors.append(key+': live operation stopped; inspect private logs');continue
                 lines=(DATA/(key+'.log')).read_text(errors='replace').splitlines();errors.append(key+': '+(lines[-1] if lines else '任务退出'))
         sources=[dict(name=k,**v) for k,v in news.get('health',{}).items() if not k.startswith('US.')]
         events=sorted(news.get('events',[]),key=lambda x:x.get('observed_at',''),reverse=True)[:150]
         # No account IDs or credentials exposed to the client.
-        return dict(market_capabilities=market_capabilities(),updated_at=datetime.now(timezone.utc).isoformat(),live_enabled=False,display_currency='USD',funding=funding,simulation_total_budget_usd=simulation_total,independent_budget_display=independent,budget_usd=paper.get('initial',600),loss_limit_usd=paper.get('loss_limit',30),single_risk_usd=min(paper.get('initial',600)*.025,paper.get('loss_limit',30)),
+        from .live_trading import public_status
+        live=public_status(ROOT)
+        return dict(live=live,market_capabilities=market_capabilities(),updated_at=datetime.now(timezone.utc).isoformat(),live_enabled=live['enabled'],display_currency='USD',funding=funding,simulation_total_budget_usd=simulation_total,independent_budget_display=independent,budget_usd=paper.get('initial',600),loss_limit_usd=paper.get('loss_limit',30),single_risk_usd=min(paper.get('initial',600)*.025,paper.get('loss_limit',30)),
             running={k:self.running(k) for k in COMMANDS},message=self.last_message,scan=dict({k:scan.get(k) for k in ('date','complete','history_count','eligible_count','errors','processed_count','excluded_count','pending_count','status_counts','source')},candidate_count=len(shown_candidates)),
             scan_schedule=read_json(ROOT/'data/trading/scan_schedule.json'),automation=read_json(ROOT/'data/trading/automation.json'),strategy=read_json(ROOT/'data/trading/strategy.report.json'),option_transport=read_json(ROOT/'data/trading/option_transport.report.json'),options=read_json(ROOT/'data/trading/options.report.json'),paper_paused=paper.get('paused',False),
             inventory=prep.get('snapshot_count',0),candidates=shown_candidates[:50],swing_research=read_json(ROOT/'data/trading/swing_research.json'),probe=probe,probe_paused=probe_state.get('paused',False),
@@ -195,11 +228,14 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:self.reply(500,{'error':str(exc)})
     def do_POST(self):
         if not self.authorized():self.reply(403,{'error':'Forbidden'});return
-        if self.path!='/action':self.reply(404,{'error':'Not found'});return
+        if self.path not in ('/action','/live'):self.reply(404,{'error':'Not found'});return
         try:
             n=int(self.headers.get('Content-Length','0'))
-            if not 0<n<=1024:raise ValueError('Invalid request length')
-            key=json.loads(self.rfile.read(n))['action']
+            if not 0<n<=4096:raise ValueError('Invalid request length')
+            payload=json.loads(self.rfile.read(n))
+            if self.path=='/live':
+                self.reply(200,{'message':self.server.controller.live_action(payload)});return
+            key=payload['action']
             if key in ('pause','stop'):message=self.server.controller.pause_local(stop=key=='stop')
             elif key=='prepare':message=self.server.controller.start('scan')+'；'+self.server.controller.start('news')
             else:message=self.server.controller.start(key)

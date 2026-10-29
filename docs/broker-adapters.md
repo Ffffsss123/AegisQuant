@@ -33,3 +33,5 @@ This is an integration checklist, not an implemented automatic plugin loader. Im
 On a timeout, query the existing order before considering another submission. An unknown result is not a rejection or permission to resend. Preserve ledgers and raw evidence. Verify all of this in simulation before considering further scope. Futures remain research-only; implementing a stock adapter does not enable futures.
 
 超时先查原订单，未知结果不等于拒单，也不授权重发。保留账本和原始证据，先在模拟环境逐项验证。期货仍仅供研究，股票适配完成不代表期货已接通。
+
+US/HK cash-stock live controls are separately implemented in `trading/live_trading.py` and `trading/live_broker.py`, disabled until explicit enable. See the [live guide](live-trading.md). Simulation permissions and ledgers do not authorize REAL orders.

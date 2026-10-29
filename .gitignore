@@ -27,3 +27,5 @@ reports/
 /data-local-config.json
 .env.*
 !.env.example
+
+*.app/

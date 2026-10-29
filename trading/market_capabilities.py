@@ -11,11 +11,13 @@ def market_capabilities():
     return {
         'system': 'AegisQuant securities',
         'live_execution_enabled': False,
+        'live_stock_execution_supported': True,
+        'live_requires_explicit_enable': True,
         'markets': [
             {'market': 'US stocks', 'scope': 'Simulation execution and reconciliation',
-             'category': 'US_STOCK', 'simulation_execution': True},
+             'category': 'US_STOCK', 'simulation_execution': True, 'live_execution_supported': True},
             {'market': 'Hong Kong stocks', 'scope': 'Simulation execution and reconciliation',
-             'category': 'HK_STOCK', 'simulation_execution': True},
+             'category': 'HK_STOCK', 'simulation_execution': True, 'live_execution_supported': True},
             {'market': 'US options', 'scope': 'Research and explicit simulation transport acceptance',
              'category': 'OPTION', 'simulation_execution': True},
             {'market': 'Futures', 'scope': 'Research only; execution and budget unverified',

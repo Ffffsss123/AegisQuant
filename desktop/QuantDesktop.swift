@@ -22,9 +22,9 @@ func localTime(_ x: Any?) -> String {
 }
 
 enum Page: String, CaseIterable {
-    case start="Overview", pause="Pause", positions="Positions", returns="Returns", news="News"
-    var icon: String { switch self {case .start:return "square.grid.2x2";case .pause:return "pause.circle";case .positions:return "tray.full";case .returns:return "chart.xyaxis.line";case .news:return "newspaper"} }
-    var subtitle: String { switch self {case .start:return "Track each step from preparation to simulation.";case .pause:return "Pause new entries while retaining reconciliation and exits.";case .positions:return "View strategy simulations and existing live positions separately.";case .returns:return "Weekly results calculated from recorded activity.";case .news:return "Review external news, sources and supporting evidence."} }
+    case start="Overview", pause="Pause", positions="Positions", returns="Returns", news="News", live="Live Trading"
+    var icon: String { switch self {case .start:return "square.grid.2x2";case .pause:return "pause.circle";case .positions:return "tray.full";case .returns:return "chart.xyaxis.line";case .news:return "newspaper";case .live:return "lock.shield"} }
+    var subtitle: String { switch self {case .start:return "Track each step from preparation to simulation.";case .pause:return "Pause new entries while retaining reconciliation and exits.";case .positions:return "View strategy simulations and existing live positions separately.";case .returns:return "Weekly results calculated from recorded activity.";case .news:return "Review external news, sources and supporting evidence.";case .live:return "Separate REAL accounts, cash budgets and explicit execution controls."} }
 }
 
 @MainActor final class Model: ObservableObject {
@@ -55,11 +55,11 @@ enum Page: String, CaseIterable {
         if let h=try? FileHandle(forWritingTo:log) { _ = try? h.seekToEnd();p.standardOutput=h;p.standardError=h }
         do {try p.run()} catch {self.error="Local service failed to start: \(error.localizedDescription)"}
     }
-    func request(_ path:String,action:String?=nil,completion:@escaping([String:Any]?,String?)->Void) {
+    func request(_ path:String,action:String?=nil,payload:[String:Any]?=nil,completion:@escaping([String:Any]?,String?)->Void) {
         let session=root.appendingPathComponent("data/desktop/session.json")
         guard let bytes=try? Data(contentsOf:session),let info=(try? JSONSerialization.jsonObject(with:bytes)) as? [String:Any],let port=info["port"] as? Int,let token=info["token"] as? String,let url=URL(string:"http://127.0.0.1:\(port)/\(path)") else {completion(nil,"Local service is not ready");return}
         var r=URLRequest(url:url);r.timeoutInterval=12;r.setValue(token,forHTTPHeaderField:"X-Local-Token")
-        if let action=action {r.httpMethod="POST";r.httpBody=try? JSONSerialization.data(withJSONObject:["action":action]);r.setValue("application/json",forHTTPHeaderField:"Content-Type")}
+        if let body=payload ?? action.map({["action":$0]}) {r.httpMethod="POST";r.httpBody=try? JSONSerialization.data(withJSONObject:body);r.setValue("application/json",forHTTPHeaderField:"Content-Type")}
         URLSession.shared.dataTask(with:r) { bytes,response,err in
             let obj=bytes.flatMap { try? JSONSerialization.jsonObject(with:$0) } as? [String:Any]
             let problem=err?.localizedDescription ?? (obj?["error"] as? String)
@@ -79,6 +79,14 @@ enum Page: String, CaseIterable {
         guard !readOnly else { message="Read-only session: trading actions disabled"; return }
         busy=true
         request("action",action:name) { [weak self] obj,problem in
+            guard let self=self else {return};self.busy=false
+            self.message=problem ?? string(obj?["message"]);self.refresh()
+        }
+    }
+    func liveAction(_ payload:[String:Any]) {
+        guard !readOnly else {message="Read-only session: live operations disabled";return}
+        busy=true
+        request("live",payload:payload) { [weak self] obj,problem in
             guard let self=self else {return};self.busy=false
             self.message=problem ?? string(obj?["message"]);self.refresh()
         }
@@ -110,6 +118,13 @@ struct MainView: View {
     @State var query=""
     @State var newsSource="All"
     @State var pauseConfirm=false
+    @State var liveConfirmation=""
+    @State var orderConfirmation=""
+    @State var liveMarket="US"
+    @State var liveSide="BUY"
+    @State var liveCode=""
+    @State var liveQuantity=""
+    @State var liveLimit=""
     var scan:[String:Any] {object(m.data["scan"])}
     var probe:[String:Any] {object(m.data["probe"])}
     var body: some View {
@@ -118,13 +133,13 @@ struct MainView: View {
                 HStack(spacing:11){Image(systemName:"waveform.path").font(.title).foregroundStyle(mint);VStack(alignment:.leading,spacing:3){Text("AegisQuant").font(.system(size:17,weight:.bold));Text("LOCAL WORKSPACE").font(.system(size:8,weight:.medium)).tracking(2).foregroundStyle(muted)}}.padding(.top,22)
                 VStack(spacing:8){ForEach(Page.allCases,id:\.self){p in Button {page=p} label:{HStack(spacing:12){Image(systemName:p.icon).frame(width:20);Text(p.rawValue).font(.system(size:14,weight:.medium));Spacer();if page==p {Circle().fill(mint).frame(width:5,height:5)}}.padding(.horizontal,15).padding(.vertical,13).foregroundStyle(page==p ? mint:muted).background(page==p ? mint.opacity(0.09):.clear,in:RoundedRectangle(cornerRadius:10))}.buttonStyle(.plain)}}
                 Spacer()
-                VStack(alignment:.leading,spacing:12){Badge(text:m.readOnly ? "Read-only · live disabled" : "Live trading disabled",color:.orange);Text(yes(object(m.data["funding"])["shared_capital"]) ? "Stocks / options budget":"Capital plan").font(.caption).foregroundStyle(muted);Text(money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"])+" USD simulation budget").font(.system(size:13,weight:.medium));Text("Reserve: "+money(object(m.data["funding"])["reserve_usd"])+" USD").font(.caption).foregroundStyle(muted);Divider();HStack{Circle().fill(m.connected ? mint:.orange).frame(width:6,height:6);Text(m.connected ? "Local service connected":"Connecting to local service").font(.caption2).foregroundStyle(muted)}}.padding(.bottom,20)
+                VStack(alignment:.leading,spacing:12){Badge(text:m.readOnly ? "Read-only session" : (yes(object(m.data["live"])["enabled"]) ? "LIVE STOCKS ARMED" : "Live stocks disabled"),color:.orange);Text(yes(object(m.data["funding"])["shared_capital"]) ? "Stocks / options budget":"Capital plan").font(.caption).foregroundStyle(muted);Text(money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"])+" USD simulation budget").font(.system(size:13,weight:.medium));Text("Reserve: "+money(object(m.data["funding"])["reserve_usd"])+" USD").font(.caption).foregroundStyle(muted);Divider();HStack{Circle().fill(m.connected ? mint:.orange).frame(width:6,height:6);Text(m.connected ? "Local service connected":"Connecting to local service").font(.caption2).foregroundStyle(muted)}}.padding(.bottom,20)
             }.padding(.horizontal,20).frame(width:210).background(Color.black.opacity(0.20))
             VStack(spacing:0){
                 HStack{VStack(alignment:.leading,spacing:7){Text(page.rawValue).font(.system(size:29,weight:.semibold));Text(page.subtitle).font(.system(size:13)).foregroundStyle(muted)};Spacer();VStack(alignment:.trailing,spacing:8){Button {m.refresh()} label:{Label("Refresh",systemImage:"arrow.clockwise")}.buttonStyle(.bordered);Text("Updated "+localTime(m.data["updated_at"])).font(.caption2).foregroundStyle(muted)}}.padding(30)
                 ScrollView {VStack(alignment:.leading,spacing:20){
                     if !m.error.isEmpty {Box{Label(m.error,systemImage:"exclamationmark.triangle").foregroundStyle(.orange);Button("Reconnect local service"){m.startBackend();m.refresh()}}}
-                    switch page {case .start:startPage;case .pause:pausePage;case .positions:positionsPage;case .returns:returnsPage;case .news:newsPage}
+                    switch page {case .start:startPage;case .pause:pausePage;case .positions:positionsPage;case .returns:returnsPage;case .news:newsPage;case .live:livePage}
                 }.padding(.horizontal,30).padding(.bottom,30)}
                 HStack{Image(systemName:"info.circle").foregroundStyle(mint);Text(m.message).font(.caption).lineLimit(2);Spacer();Button("Open project"){m.openFolder("")}.buttonStyle(.plain).foregroundStyle(muted)}.padding(.horizontal,30).padding(.vertical,12).background(.black.opacity(0.14))
             }
@@ -137,7 +152,7 @@ struct MainView: View {
         VStack(spacing:20){
             HStack(spacing:14){Metric(title:"Simulation budget",value:money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"]),note:yes(m.data["independent_budget_display"]) ? "US stocks / US options / HK stocks: USD 500 each" : "USD · subject to ledger allocation");Metric(title:"Daily history coverage",value:"\(Int(number(scan["history_count"])))",note:"At least 60 completed daily bars");Metric(title:"Current candidates",value:"\(Int(number(scan["candidate_count"] ?? list(m.data["candidates"]).count)))",note:"Candidates are not buy instructions")}
             Box {
-                HStack{VStack(alignment:.leading,spacing:7){Text("Prepare, then simulate").font(.title2.weight(.semibold));Text("Market scans, external news and simulation acceptance run separately. Live trading cannot be enabled here.") .font(.callout).foregroundStyle(muted)};Spacer();Image(systemName:"arrow.up.right.circle").font(.system(size:42,weight:.ultraLight)).foregroundStyle(mint)}
+                HStack{VStack(alignment:.leading,spacing:7){Text("Prepare, then simulate").font(.title2.weight(.semibold));Text("Market scans, external news and simulation acceptance run separately. Live stock controls are separate in Live Trading.") .font(.callout).foregroundStyle(muted)};Spacer();Image(systemName:"arrow.up.right.circle").font(.system(size:42,weight:.ultraLight)).foregroundStyle(mint)}
                 HStack(spacing:12){actionButton(m.running("scan") ? "Scan in progress":"Run supplemental scan","prepare",primary:true);actionButton(string(probe["status"]) == "transport_passed" ? "Transport acceptance passed":m.running("probe") ? "Simulation acceptance running":"Start / resume simulation acceptance","probe");Spacer()}
                 HStack(spacing:8){Badge(text:scanActivityLabel,color:m.running("automation") || m.running("scan") ? mint:muted);Badge(text:m.running("news") ? "News monitoring":"News offline",color:m.running("news") ? mint:muted);Badge(text:m.running("strategy") ? "Strategy simulation running":m.running("probe") ? "Transport test running":string(probe["status"]) == "transport_passed" ? "Transport acceptance passed":"Transport test offline",color:(m.running("strategy") || m.running("probe")) ? mint:muted)}
                 if m.running("automation") {
@@ -176,7 +191,7 @@ struct MainView: View {
                 if let reason=strategy["data_block"] as? String {Text(reason).font(.caption).foregroundStyle(.orange)}
                 if let reason=strategy["reason"] as? String {Text(reason).font(.caption).foregroundStyle(.orange)}
                 if let wait=strategy["quote_wait"] as? [String:Any] {Text("Waiting for "+string(wait["code"])+" valid quotes: \(Int(number(wait["elapsed_seconds"]))) / 120 s").font(.caption).foregroundStyle(.orange)}
-                Text("After transport acceptance, reconcile the simulation account before strategy simulation. Live trading remains disabled.").font(.caption).foregroundStyle(muted)
+                Text("After transport acceptance, reconcile the simulation account before strategy simulation. Simulation acceptance does not arm live trading.").font(.caption).foregroundStyle(muted)
             }
             Box {
                 let options=object(m.data["options"])
@@ -272,7 +287,7 @@ struct MainView: View {
     func handoffStatus(_ value:String)->String {switch value {case "waiting_probe_exit":return "Awaiting transport test completion";case "waiting_interface_acceptance":return "Awaiting transport acceptance";case "strategy_running":return "Strategy simulation running";case "checking_account_and_handoff":return "Reconciling account and ledger";case "blocked":return "Attention required";default:return "Awaiting review"}}
     func strategyStatus(_ value:String)->String {switch value {case "strategy_running":return "Strategy simulation running; acceptance incomplete";case "strategy_passed":return "Strategy acceptance passed; simulation continues";case "paused":return "New buys paused; reconciliation and exits continue";case "stopped":return "Trading stopped; reconciliation and cancellations continue";case "needs_attention":return "Attention required";default:return "Not started"}}
     var pausePage:some View {
-        VStack(spacing:20){Box{HStack{Image(systemName:"pause.circle").font(.system(size:42,weight:.light)).foregroundStyle(.orange);VStack(alignment:.leading,spacing:8){Text("Pause simulation entries").font(.title2.weight(.semibold));Text("Save the pause state first, then attempt to cancel outstanding simulation buy orders.") .foregroundStyle(muted)}};Text("Pausing does not confirm cancellation or automatically close positions. These controls do not manage existing live positions.").font(.callout).foregroundStyle(muted);HStack {actionButton("Pause simulation entries","pause");actionButton("Stop simulation trading","stop")};Badge(text:(yes(m.data["probe_paused"]) || yes(m.data["paper_paused"])) ? "Simulation ledger paused":"See the latest task status",color:.orange)};Box{Text("Operating limits").font(.headline);Text("• Simulation budget \(money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"])) USD; reserve \(money(object(m.data["funding"])["reserve_usd"])) USD\n• Cumulative strategy loss \(money(m.data["loss_limit_usd"])) USD pauses new buys\n• Live stocks and options disabled\n• Closing this window does not stop background tasks\n• Keep the computer online and broker gateway signed in") .font(.callout).foregroundStyle(muted).lineSpacing(9);Button("View operating guide"){m.openFolder("两项准备任务.md")}}}
+        VStack(spacing:20){Box{HStack{Image(systemName:"pause.circle").font(.system(size:42,weight:.light)).foregroundStyle(.orange);VStack(alignment:.leading,spacing:8){Text("Pause simulation entries").font(.title2.weight(.semibold));Text("Save the pause state first, then attempt to cancel outstanding simulation buy orders.") .foregroundStyle(muted)}};Text("Pausing does not confirm cancellation or automatically close positions. These controls do not manage existing live positions.").font(.callout).foregroundStyle(muted);HStack {actionButton("Pause simulation entries","pause");actionButton("Stop simulation trading","stop")};Badge(text:(yes(m.data["probe_paused"]) || yes(m.data["paper_paused"])) ? "Simulation ledger paused":"See the latest task status",color:.orange)};Box{Text("Operating limits").font(.headline);Text("• Simulation budget \(money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"])) USD; reserve \(money(object(m.data["funding"])["reserve_usd"])) USD\n• Cumulative strategy loss \(money(m.data["loss_limit_usd"])) USD pauses new buys\n• Simulation controls do not enable live trading\n• Closing this window does not stop background tasks\n• Keep the computer online and broker gateway signed in") .font(.callout).foregroundStyle(muted).lineSpacing(9);Button("View operating guide"){m.openFolder("两项准备任务.md")}}}
     }
     var positionsPage:some View {
         VStack(spacing:20){Box{HStack{VStack(alignment:.leading,spacing:6){Text("Existing live positions · read-only").font(.headline);Text("Manual positions are not attributed to the strategy. This page does not submit orders.").font(.caption).foregroundStyle(muted)};Spacer();actionButton("Refresh account positions","account")};Text("Account snapshot: "+localTime(m.data["account_updated"])).font(.caption).foregroundStyle(muted);if let err=m.data["account_error"] as? String {Text(err).foregroundStyle(.orange).font(.caption)}}
@@ -329,6 +344,77 @@ struct MainView: View {
             if filteredEvents.isEmpty {Box{Empty(icon:"newspaper",title:"No matching news",detail:"News updates in the background. Review source health or change filters.")}} else {ForEach(Array(filteredEvents.enumerated()),id:\.offset){_,e in Box{HStack{Text(string(e["source"])).font(.caption.weight(.medium)).foregroundStyle(mint);Spacer();Badge(text:actionName(string(e["action"])),color:string(e["action"])=="block" ? .orange:muted)};Text(string(e["title"])).font(.system(size:16,weight:.medium)).textSelection(.enabled);HStack{Text("Published "+localTime(e["published_at"]));Spacer();Text("Collected "+localTime(e["observed_at"]))}.font(.caption2).foregroundStyle(muted);let analysis=object(e["analysis"]);ForEach(analysis["hypotheses"] as? [String] ?? [],id:\.self){x in Text(x).font(.callout).foregroundStyle(muted)};Text(string(e["reason"])).font(.caption).foregroundStyle(muted);if let raw=e["url"] as? String,let u=URL(string:raw),u.scheme=="https" {Link("Open source ↗",destination:u).font(.caption).foregroundStyle(mint)}}}
         }
     }
+    }
+    func liveButton(_ title:String,_ action:String)->some View {
+        Button(title){m.liveAction(["action":action])}.buttonStyle(.bordered)
+            .disabled(m.readOnly || !m.connected || m.busy)
+    }
+    var livePage:some View {
+        let live=object(m.data["live"])
+        return VStack(alignment:.leading,spacing:20){
+            Box {
+                HStack {Text("Live cash-stock execution").font(.title2.weight(.semibold));Spacer();
+                    Badge(text:yes(live["enabled"]) ? (yes(live["paused"]) ? "ARMED · ENTRIES PAUSED":"ARMED") : "DISABLED",color:.orange)}
+                Badge(text:m.running("live_runner") ? "WORKER RUNNING":"WORKER OFFLINE",color:m.running("live_runner") ? mint:.orange)
+                Text("Real-money US and HK common stocks only. Options and futures remain disabled. Simulation accounts, budgets and controls are separate.").foregroundStyle(muted)
+                Text("Combined limit: 2 stock symbols, including pending buys. Cash only; no borrowing, deposits or currency conversion. USD 390 reserve stays untouched.").font(.callout).foregroundStyle(muted)
+                if yes(live["loss_latched"]) {Label("Joint loss limit is latched. New buys cannot be resumed here.",systemImage:"exclamationmark.triangle").foregroundStyle(.orange)}
+            }
+            Box {
+                Text("1. Configure and verify").font(.headline)
+                Text("Create a local draft, then enter your own REAL account IDs, cash budgets, loss limits and securities entity in config.json. US amounts are USD; HK amounts are HKD. Automatic entries are off by default.").font(.callout).foregroundStyle(muted)
+                HStack {liveButton("Create config draft","template");Button("Open local configuration"){m.openFolder("data/trading/live/config.json")};liveButton("Refresh HK FX reference","refresh_fx")}
+                Text("A matching natural simulation round trip, clean reconciliation and current protection tests are required before enable. Unlock trading manually in your broker gateway; no trading password is collected here.").font(.callout).foregroundStyle(muted)
+                HStack {liveButton("Run protection regression","validate");liveButton("Validate & bind REAL accounts","prepare")}
+                ForEach(Array(list(live["markets"]).enumerated()),id:\.offset) { _,row in
+                    Text(string(row["market"])+" · "+money(row["budget_native"])+" "+string(row["currency"])+" · pending "+String(Int(number(row["pending"])))+" · alerts "+String(Int(number(row["alerts"])))).font(.callout).monospacedDigit()
+                    ForEach(Array(list(row["positions"]).enumerated()),id:\.offset) { _,position in
+                        Text("Owned: "+string(position["code"])+" · "+money(position["qty"])+" shares").font(.callout)
+                    }
+                    ForEach(Array(list(row["orders"]).enumerated()),id:\.offset) { _,order in
+                        Text(string(order["side"])+" "+string(order["code"])+" · "+money(order["filled"])+" / "+money(order["qty"])+" · limit "+money(order["limit"])+" "+string(row["currency"])+" · "+string(order["status"])+(yes(order["cancel_requested"]) ? " · CANCEL REQUESTED":"")+(yes(order["fee_final"]) ? "":" · FEES PENDING")).font(.caption).foregroundStyle(muted)
+                    }
+                }
+            }
+            Box {
+                Text("2. Enable, then start execution").font(.headline)
+                Text("Enabling arms REAL stock execution but does not start a worker. The first order must wait for a later trading session. Reopening this app never starts the live worker automatically.").font(.callout).foregroundStyle(muted)
+                TextField("Type ENABLE LIVE STOCKS",text:$liveConfirmation).textFieldStyle(.roundedBorder)
+                HStack {
+                    Button("Enable live stocks") {m.liveAction(["action":"enable","confirmation":liveConfirmation]);liveConfirmation=""}
+                        .disabled(m.readOnly || !m.connected || m.busy || liveConfirmation != "ENABLE LIVE STOCKS")
+                    liveButton("Start live execution worker","start")
+                    liveButton("Reconcile once","maintain")
+                }.buttonStyle(.bordered)
+                HStack {
+                    Button("Pause live buys"){m.liveAction(["action":"pause"])}
+                    Button("Latch live stop"){m.liveAction(["action":"stop"])}
+                }.buttonStyle(.bordered).disabled(m.readOnly || !m.connected)
+                Text("Pause retains owned-position exits, cancellation and reconciliation. Stop cancels orders and blocks new order submissions, including automatic exits; reconcile any remaining holdings manually. Neither button guarantees a flat account.").font(.caption).foregroundStyle(muted)
+            }
+            Box {
+                Text("3. Explicit limit-order ticket").font(.headline)
+                Text("Requires an armed portfolio and a running maintenance worker. New buys must also pass the completed scan, stock identity, fresh bid/ask, news, cash and joint-risk checks. Manual holdings cannot be sold here.").font(.callout).foregroundStyle(muted)
+                HStack {
+                    Picker("Market",selection:$liveMarket){Text("US").tag("US");Text("HK").tag("HK")}.frame(width:160)
+                    Picker("Side",selection:$liveSide){Text("BUY").tag("BUY");Text("SELL").tag("SELL")}.frame(width:160)
+                    TextField("US.AAPL / HK.00700",text:$liveCode).textFieldStyle(.roundedBorder)
+                }
+                HStack {TextField("Whole shares / board lots",text:$liveQuantity);TextField("Limit price (USD / HKD)",text:$liveLimit)}.textFieldStyle(.roundedBorder)
+                TextField("Type PLACE LIVE ORDER",text:$orderConfirmation).textFieldStyle(.roundedBorder)
+                Button("Submit REAL limit order") {
+                    m.liveAction(["action":"order","market":liveMarket,"side":liveSide,"code":liveCode.trimmingCharacters(in:.whitespacesAndNewlines),"qty":liveQuantity,"limit":liveLimit,"confirmation":orderConfirmation,"request_id":UUID().uuidString.replacingOccurrences(of:"-",with:"").lowercased()]);orderConfirmation=""
+                }.buttonStyle(.bordered).disabled(m.readOnly || !m.connected || m.busy || orderConfirmation != "PLACE LIVE ORDER")
+                Text("Each request has a unique identity. A timeout means inspect and reconcile; never assume rejection or submit a replacement. Orders retain their fixed limits and are due for cancellation after 60 seconds.").font(.caption).foregroundStyle(muted)
+            }
+            Box {
+                Text("Latest live operation").font(.headline)
+                let report=object(live["report"])
+                Text(string(report["status"]));Text(string(report["message"])).foregroundStyle(muted)
+                Text("Updated "+localTime(report["checked_at"])).font(.caption).foregroundStyle(muted)
+                Button("Open live setup guide"){m.openFolder("docs/live-trading.md")}
+            }
+        }
     }
     func sourceName(_ s:String)->String { ["fed_policy":"Federal Reserve · policy","fed_speech":"Federal Reserve · speeches","whitehouse":"White House","bbc_business":"BBC Business","reuters_index":"Reuters · public index","x":"X" ][s] ?? s }
     func actionName(_ s:String)->String { ["observe":"Unverified / watch","reduce":"Reduce new-entry allocation","block":"Buy cooldown rules"][s] ?? "Watch" }

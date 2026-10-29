@@ -10,12 +10,12 @@ AegisQuant uses securities API adapters and is not branded for a single broker. 
 
 | Market | Current scope |
 | --- | --- |
-| US stocks | Screening, long-only swing simulation, risk controls and reconciliation |
-| Hong Kong stocks | Calendar, board-lot and tick validation, simulation execution and reconciliation |
+| US stocks | Screening, swing simulation, explicitly enabled cash-stock live execution and reconciliation |
+| Hong Kong stocks | Calendar, board-lot/tick checks, simulation and explicitly enabled cash-stock live execution |
 | US options | Contract research and SIMULATE transport acceptance |
 | Futures | Research and a reserved FUTURE accounting category; no execution runner, verified execution channel or allocated execution budget |
 
-Publication does not establish live readiness, completed execution acceptance or profitability. The console does not enable live trading.
+Publication does not establish live readiness, completed execution acceptance or profitability. The separate Live Trading page supports explicitly armed US/HK cash-stock execution; live trading is disabled by default. See the [live setup guide](docs/live-trading.md).
 
 ## Securities console
 
@@ -51,6 +51,8 @@ Each channel has its own configuration, account state, and execution safeguards.
 
 ## Trading logic
 
+The strategy descriptions below refer to simulation. The separate live-stock path currently uses the original daily-trend engine, as documented in the [live guide](docs/live-trading.md).
+
 ### US stocks
 
 - A long-only short-term swing framework checks the underlying trend, liquidity, and a breakout above the previous five sessions' highs using completed daily data.
@@ -75,6 +77,14 @@ Each channel has its own configuration, account state, and execution safeguards.
 
 Futures remain a research and integration-check area. Contract eligibility, market-data access, multiplier, tick size, margin, fees, trading calendar, execution capability, and an independent budget must be verified before any executable strategy can be considered. This repository does not claim an enabled or accepted US/HK futures execution flow.
 
+## Live stock enable and execution
+
+The English **Live Trading** page provides separate REAL account preparation, explicit enable, a manually started maintenance worker, and confirmed limit-order tickets for US/HK common stocks. Automatic daily-trend entries default to off. It uses separate native-currency ledgers, two joint stock slots, cash-only admission, loss latches, quote checks and durable unknown-order recovery. Options and futures remain disabled. This is implemented code tested with fake brokers; no REAL fill acceptance is claimed.
+
+Follow the [step-by-step live guide](docs/live-trading.md) before any account operation. The live path uses the original daily-trend engine; the simulation ATR swing engine has not been promoted to live execution.
+
+![Live Trading controls, disabled](docs/images/aegisquant-live-controls-en.png)
+
 ## Connect your securities API
 
 Obtain official API access for your target markets and simulation accounts. Gateway APIs require the provider's local gateway; key/secret, OAuth and signed APIs require an adapter implementing the corresponding authentication. Keep credentials out of source control. Validate read-only account data before testing orders, cancellations, partial fills, unknown responses and reconciliation in the provider's simulation environment.
@@ -90,7 +100,7 @@ cp trading/config.example.json data-local-config.json
 .venv/bin/python trade.py --config data-local-config.json --port 11111 doctor
 ```
 
-These are **adapter-specific commands, not universal broker commands**. Default gateway: `127.0.0.1:11111`; do not expose it publicly. `doctor` does not start strategies. See [adapter details](docs/broker-adapters.md). Keep `live_stocks` and `live_options` false. Configuration must pass `Config.validate()`. The older example uses NZD and does not reproduce the migrated USD ledgers in the screenshot. Replace and verify example account IDs `000001` (US) and `000002` (HK). Do not reset existing ledgers to bypass checks. Public clones do not contain original account bindings or acceptance records.
+These are **adapter-specific commands, not universal broker commands**. Default gateway: `127.0.0.1:11111`; do not expose it publicly. `doctor` does not start strategies. See [adapter details](docs/broker-adapters.md). Keep the legacy `live_stocks` and `live_options` false; the new live-stock portfolio has its own explicit enable workflow. Configuration must pass `Config.validate()`. The older example uses NZD and does not reproduce the migrated USD ledgers in the screenshot. Replace and verify example account IDs `000001` (US) and `000002` (HK). Do not reset existing ledgers to bypass checks. Public clones do not contain original account bindings or acceptance records.
 
 ## Connect your AI analysis API (optional, read-only)
 

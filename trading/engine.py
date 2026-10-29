@@ -164,7 +164,8 @@ class Engine:
             if not enabled: raise SafetyError('Live product switch is disabled')
             from zoneinfo import ZoneInfo
             enabled_at=s.get('stocks_enabled_at' if kind=='STOCK' else 'options_enabled_at')
-            if not enabled_at or now.astimezone(ZoneInfo('America/New_York')).date()<=datetime.fromisoformat(enabled_at).astimezone(ZoneInfo('America/New_York')).date():
+            market_zone=getattr(self.b,'timezone',ZoneInfo('America/New_York'))
+            if not enabled_at or now.astimezone(market_zone).date()<=datetime.fromisoformat(enabled_at).astimezone(market_zone).date():
                 raise SafetyError('First live execution must wait until a later trading session')
         if self.blocked_orders(s): raise SafetyError('Pending/unknown order or unsettled fees')
         # Reconcile immediately before every mutation and recheck the risk state.
