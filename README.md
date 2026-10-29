@@ -15,19 +15,13 @@ Quantitative research and simulation for **US and Hong Kong stocks, US options, 
 
 This public source snapshot does not establish live-trading readiness, completed broker execution acceptance, or profitability. The separate `binance_trader/` directory contains an optional commodity-contract tool; its interface is not the US/HK securities console.
 
-## Securities console capability preview
+## Actual moomoo securities console
 
-![AegisQuant securities capability preview](docs/images/aegisquant-securities-capabilities.png)
+![Actual moomoo securities trading console](docs/images/moomoo-securities-console.png)
 
-Actual native read-only capability viewer generated from `trading.market_capabilities`; this is a separate scope viewer, not the operational trading dashboard. This read-only view loads no account data and starts no trading backend. It shows code scope, not filled orders, profitability, or futures execution acceptance. The operational console retains its existing Chinese interface.
+Captured from the existing macOS securities console on October 29, 2026, displaying its real local simulation ledgers and historical scan records. The operational interface is currently Chinese. The securities integration uses the official moomoo Python SDK through local OpenD (`trading/moomoo.py`), not the separate Binance API.
 
-Inspect the same declared scope from source:
-
-```sh
-python3 -m trading.market_capabilities
-# Build the separate native read-only viewer on macOS:
-zsh desktop/build_capabilities_preview.sh
-```
+**Screenshot status:** the local status service is connected in a read-only screenshot session; OpenD and trading workers are not running. The displayed scan signal date is October 15, 2026. The 1,500 USD is the configured simulation budget, not live account equity. Historical records do not prove current broker connectivity, completed acceptance, or profitability. No strategy was resumed and no order was submitted for this screenshot.
 
 ## Runtime workflow
 

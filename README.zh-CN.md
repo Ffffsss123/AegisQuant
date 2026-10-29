@@ -15,19 +15,13 @@
 
 公开源码不代表已完成实盘准备、券商成交验收或盈利验证。`binance_trader/` 是仓库内另一个可选商品合约工具，其界面不能代表美港股证券控制台。
 
-## 股票控制台能力预览
+## 实际 moomoo 证券交易控制台
 
-![AegisQuant 证券控制台能力预览](docs/images/aegisquant-securities-capabilities.png)
+![真实 moomoo 证券交易控制台](docs/images/moomoo-securities-console.png)
 
-根据 `trading.market_capabilities` 生成的原生只读能力查看器（独立范围展示页，不是实际交易操作面板），不读取账户数据、不启动交易后台。此图展示源码能力边界，不代表成交、盈利或期货执行验收；原操作控制台仍保留中文界面。
+2026 年 10 月 29 日从本机现有 Mac 证券控制台直接截图，读取实际本地模拟账本和历史扫描记录。操作界面目前为中文。证券接入使用官方 moomoo Python SDK，通过本地 OpenD 通信（`trading/moomoo.py`），不是独立币安 API。
 
-可从源码查询同一能力声明：
-
-```sh
-python3 -m trading.market_capabilities
-# Build the separate native read-only viewer on macOS:
-zsh desktop/build_capabilities_preview.sh
-```
+**截图状态：**本地状态服务以只读方式连接，OpenD 和交易工作进程均未运行。画面扫描信号日期为 2026 年 10 月 15 日；1,500 USD 为配置的模拟预算，不是真实账户权益。历史记录不代表当前券商在线、验收完成或盈利。本次截图未恢复策略、未提交订单。
 
 ## 基本运行逻辑
 
