@@ -1,27 +1,27 @@
 # AegisQuant
 
-**English** | [简体中文](README.md)
+**English** | [简体中文](README.zh-CN.md)
 
-Quantitative research and simulation for **US and Hong Kong stocks, US options, and futures research**. The core system connects market data, news, screening, risk controls, simulated order execution, and reconciliation.
+An English-language securities console for **US and Hong Kong stocks, US options, and futures research**. It connects market data, news, screening, risk controls, simulation execution and reconciliation.
 
-## Market coverage
+## Platforms and current scope
+
+AegisQuant uses securities API adapters and is not branded for a single broker. A platform with a suitable API can be an integration target. **The current implementation includes one SDK / local-gateway adapter; entering an arbitrary broker API key does not make that platform compatible.** Additional adapters must implement and validate quotes, history, accounts, positions, orders, cancellations and fills, including permissions, market rules and calendars. See [broker integration details](docs/broker-adapters.md).
 
 | Market | Current scope |
 | --- | --- |
-| US stocks | Screening, long-only swing simulation, risk controls, and broker reconciliation |
-| Hong Kong stocks | Calendar-aware scanning, board-lot/tick validation, simulation execution, and reconciliation |
-| US options | Contract research and explicit SIMULATE order-transport acceptance |
-| Futures | Reserved FUTURE accounting category and research scope only; no futures execution runner or funded/verified execution channel |
+| US stocks | Screening, long-only swing simulation, risk controls and reconciliation |
+| Hong Kong stocks | Calendar, board-lot and tick validation, simulation execution and reconciliation |
+| US options | Contract research and SIMULATE transport acceptance |
+| Futures | Research and a reserved FUTURE accounting category; no execution runner, verified execution channel or allocated execution budget |
 
-This public source snapshot does not establish live-trading readiness, completed broker execution acceptance, or profitability. The separate `binance_trader/` directory contains an optional commodity-contract tool; its interface is not the US/HK securities console.
+Publication does not establish live readiness, completed execution acceptance or profitability. The console does not enable live trading.
 
-## Actual moomoo securities console
+## Securities console
 
-![Actual moomoo securities trading console](docs/images/moomoo-securities-console.png)
+![AegisQuant securities console](docs/images/aegisquant-securities-console-en.png)
 
-Captured from the existing macOS securities console on October 29, 2026, displaying its real local simulation ledgers and historical scan records. The operational interface is currently Chinese. The securities integration uses the official moomoo Python SDK through local OpenD (`trading/moomoo.py`), not the separate Binance API.
-
-**Screenshot status:** the local status service is connected in a read-only screenshot session; OpenD and trading workers are not running. The displayed scan signal date is October 15, 2026. The 1,500 USD is the configured simulation budget, not live account equity. Historical records do not prove current broker connectivity, completed acceptance, or profitability. No strategy was resumed and no order was submitted for this screenshot.
+The actual English macOS securities console displaying existing local simulation ledgers and historical scan records. The capture uses a read-only status service; the broker gateway and trading workers are offline. No strategy was resumed and no order submitted. The displayed scan date is historical; USD 1,500 is a configured simulation budget, not live account equity or proof of broker connectivity or acceptance. Original diagnostics and news retain their source language.
 
 ## Runtime workflow
 
@@ -73,45 +73,62 @@ Each channel has its own configuration, account state, and execution safeguards.
 
 ### Futures research
 
-Futures remain a research and integration-check area. Contract eligibility, market-data access, multiplier, tick size, margin, fees, trading calendar, execution capability, and an independent budget must be verified before any executable strategy can be considered. This repository does not claim an enabled or accepted US/HK futures execution flow. The Binance commodity tool is a separate implementation and is not evidence of futures readiness for the securities system.
+Futures remain a research and integration-check area. Contract eligibility, market-data access, multiplier, tick size, margin, fees, trading calendar, execution capability, and an independent budget must be verified before any executable strategy can be considered. This repository does not claim an enabled or accepted US/HK futures execution flow.
 
-## Layout and setup
+## Connect your securities API
 
-| Path | Purpose |
-| --- | --- |
-| `trading/` | US/HK equities and options data, scanning, simulation, reconciliation, and risk controls |
-| `binance_trader/` | Binance backend, strategy, news, AI filters, and browser interface |
-| `desktop/` | Separate US/HK macOS console (Chinese interface) |
-| `binance_trader/desktop/` | Binance macOS launcher, Keychain helper, and build script |
-| `tests/`, `binance_trader/tests/` | Regression tests |
-| `examples/` | Synthetic demonstration data |
-| Top-level Python scripts | Connection diagnostics, backtests, validation, and return reports |
+Obtain official API access for your target markets and simulation accounts. Gateway APIs require the provider's local gateway; key/secret, OAuth and signed APIs require an adapter implementing the corresponding authentication. Keep credentials out of source control. Validate read-only account data before testing orders, cancellations, partial fills, unknown responses and reconciliation in the provider's simulation environment.
 
-### Start with the US/HK tools
+For the included local-gateway adapter:
 
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python trade.py doctor
+.venv/bin/python connect.py --port 11111 --quotes --accounts
+.venv/bin/python trade.py --port 11111 doctor
+cp trading/config.example.json data-local-config.json
+.venv/bin/python trade.py --config data-local-config.json --port 11111 doctor
 ```
 
-Install and sign in to official OpenD separately. Appropriate market-data and account permissions are required. Review `trading/config.example.json`; configure your own local simulation environment before running strategy commands. `doctor` performs diagnostics and does not start an automated strategy. Public clones do not include the original ledgers, account bindings, or runtime acceptance evidence.
+These are **adapter-specific commands, not universal broker commands**. Default gateway: `127.0.0.1:11111`; do not expose it publicly. `doctor` does not start strategies. See [adapter details](docs/broker-adapters.md). Keep `live_stocks` and `live_options` false. Configuration must pass `Config.validate()`. The older example uses NZD and does not reproduce the migrated USD ledgers in the screenshot. Replace and verify example account IDs `000001` (US) and `000002` (HK). Do not reset existing ledgers to bypass checks. Public clones do not contain original account bindings or acceptance records.
 
-### macOS securities console
+## Connect your AI analysis API (optional, read-only)
 
-The operational console requires a compatible Xcode/SwiftUI toolchain. The current local Command Line Tools build reports a missing `SwiftUIMacros` plugin; a successful operational-console rebuild is not claimed. Its build command is:
+News monitoring currently uses rules. The separate `trading/ai_analysis.py` research CLI supports Chat Completions-compatible services; there is no GUI key-entry page or AI-to-order integration.
+
+Obtain your provider's API base URL, supported model name and API key:
+
+```sh
+.venv/bin/python -m trading.ai_analysis \
+  --base-url https://provider.example/v1 \
+  --model your-model-name \
+  --text 'Analyze this public announcement. Separate facts, assumptions, risks and invalidation conditions.'
+```
+
+Replace the example URL and model. The CLI prompts for a hidden key without saving it, or reads `AEGIS_AI_API_KEY`. HTTPS is required except on loopback HTTP. The endpoint must support `/chat/completions`. Securities and AI credentials are separate.
+
+Only explicitly supplied research text is sent; account data, positions, ledgers and broker credentials are not loaded. Responses default to English; request another language in the text if desired. Providers may charge for calls. Requests time out after 45 seconds without automatic retries. Tests use isolated fake services; no paid live-provider validation is claimed.
+
+## Layout and macOS launch
+
+| Path | Purpose |
+| --- | --- |
+| `desktop/QuantDesktop.swift` | English macOS securities console |
+| `trading/` | Data, scanning, simulation, reconciliation, risk and read-only AI research |
+| `tests/` | Regression tests |
+| `examples/` | Synthetic examples |
+| Top-level Python scripts | Diagnostics, backtests and reporting |
+
+Use a compatible macOS SDK and SwiftUI toolchain:
 
 ```sh
 zsh desktop/build.sh
+open AegisQuant.app
 ```
 
-This builds `量化控制台.app`, the US/HK securities console. Its current interface is Chinese. The recently added English interface belongs to the separate Binance tool and must not be presented as an English securities/futures console. Built applications are not included in this repository.
+The build produces `AegisQuant.app`. A normal launch connects the local backend and manages tasks according to local configuration. Configure simulation accounts and permissions first. Launching with `AEGIS_READ_ONLY=1` prevents this app from starting its backend or sending action requests; an existing status service is required to display data. Closing the window does not stop background processes.
 
-### Optional separate Binance tool
-
-See [the Binance tool guide](binance_trader/README.md). It uses `binance_trader/requirements.txt`, its own data directory, and separate execution permissions. It is not required to use the US/HK research and simulation tools.
-
-This is a sanitized source snapshot. Runtime databases, balances, trade history, credentials, local reports, dependencies, and built application bundles are excluded. Simulated account bindings in deployment code and its tests use example IDs `000001` (US) and `000002` (HK). Configure and validate your own bindings before deployment.
+This sanitized source snapshot excludes runtime databases, balances, trade history, credentials, dependencies and built apps. Other separate tools retained in the repository do not participate in the securities console's connection or execution.
 
 ## Copyright, commercial use, and attribution / 版权、商业使用与来源标注
 

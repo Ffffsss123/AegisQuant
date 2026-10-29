@@ -1,33 +1,27 @@
-# moomoo 量化控制台（AegisQuant）
+# AegisQuant
 
 **简体中文** | [English](README.en.md)
 
-基于 **moomoo / OpenD**，面向 **美股、港股、美国期权及期货研究** 的量化研究与模拟系统，串联行情、新闻、选股、风控、模拟订单执行和账户对账。
+面向 **美股、港股、美国期权及期货研究** 的量化研究与模拟控制台。软件界面使用英文，串联行情、新闻、选股、风控、模拟订单执行和账户对账。
 
-## 这是什么软件
+## 平台与接入范围
 
-这里主要展示原生 **moomoo 量化控制台**：`desktop/QuantDesktop.swift` 是中文 Mac 操作界面，`trading/` 是证券行情、新闻、模拟策略与对账代码。程序标识符保留 Python / Swift 的常用英文命名，界面和本页说明使用中文。
-
-证券连接路径：**量化控制台 → 本机 Python 后台 → 官方 moomoo SDK → OpenD → moomoo 证券账户**。本软件不是 Binance 交易器；`binance_trader/` 为独立历史工具，不参与证券控制台的 API 配置。
-
-## 市场覆盖与当前范围
+AegisQuant 采用证券 API 适配的接入方式，不以某一家交易平台命名。拥有合适 API 的证券平台可以作为接入目标；**当前版本附带一个 SDK / 本地网关适配器，并非填入任意平台的 API Key 就能直接使用。** 新平台需要实现并验证行情、历史数据、账户、持仓、订单、撤单及成交回报接口，还要匹配其权限、市场规则和交易日历。具体接口与现有适配器见 [证券 API 接入说明](docs/broker-adapters.md)。
 
 | 市场 | 当前范围 |
 | --- | --- |
 | 美股股票 | 全市场筛选、做多波段模拟、风控与券商对账 |
 | 港股股票 | 交易日历、整手及价位检查、模拟执行与对账 |
-| 美国期权 | 合约研究及明确授权的 SIMULATE 订单传输验收 |
-| 期货 | 仅有 FUTURE 记账分类预留和研究范围；无期货执行后台，也无已验证或已分配的执行资金通道 |
+| 美国期权 | 合约研究及 SIMULATE 订单传输验收 |
+| 期货 | 研究及 FUTURE 记账分类预留；没有期货执行后台、已验证通道或执行预算 |
 
-公开源码不代表已完成实盘准备、券商成交验收或盈利验证。`binance_trader/` 是仓库内另一个可选商品合约工具，其界面不能代表美港股证券控制台。
+公开源码不代表实盘已就绪、券商成交验收已完成或盈利已验证。当前控制台不提供实盘启用。
 
-## 实际 moomoo 证券交易控制台
+## 英文证券控制台
 
-![真实 moomoo 证券交易控制台](docs/images/moomoo-securities-console.png)
+![AegisQuant securities console](docs/images/aegisquant-securities-console-en.png)
 
-2026 年 10 月 29 日从本机现有 Mac 证券控制台直接截图，读取实际本地模拟账本和历史扫描记录。操作界面目前为中文。证券接入使用官方 moomoo Python SDK，通过本地 OpenD 通信（`trading/moomoo.py`），不是独立币安 API。
-
-**截图状态：**本地状态服务以只读方式连接，OpenD 和交易工作进程均未运行。画面扫描信号日期为 2026 年 10 月 15 日；1,500 USD 为配置的模拟预算，不是真实账户权益。历史记录不代表当前券商在线、验收完成或盈利。本次截图未恢复策略、未提交订单。
+本机实际 Mac 证券控制台的英文界面，读取现有本地模拟账本和历史扫描记录。截图采用只读状态服务，交易工作进程和证券网关未运行；未恢复策略、未提交订单。画面中的扫描日期是历史信号日期，1,500 USD 是配置的模拟预算，不是真实账户权益，也不代表当前券商在线或验收通过。原始诊断和新闻原文保留其来源语言。
 
 ## 基本运行逻辑
 
@@ -40,7 +34,7 @@
           ↓
 预算、仓位、亏损阈值与暂停状态检查
           ↓
-模拟执行或已明确启用的交易通道
+SIMULATE 模拟订单执行
           ↓
 查询订单 → 核验成交 → 更新持仓与账本
           ↓
@@ -79,107 +73,69 @@
 
 ### 期货研究
 
-期货目前仍处于研究及接入检查阶段。必须先核验合约资格、行情权限、乘数、最小价位、保证金、费用、交易日历、执行能力及独立预算。本仓库不宣称已经启用或验收美港市场的期货自动执行；独立币安工具的能力不能充当证券系统期货能力的证明。
+期货目前仍处于研究及接入检查阶段。必须先核验合约资格、行情权限、乘数、最小价位、保证金、费用、交易日历、执行能力及独立预算。本仓库不宣称已经启用或验收美港市场的期货自动执行。
 
-## 配置自己的证券 API（moomoo / OpenD）
+## 连接自己的证券 API
 
-### 1. 安装 Python 依赖
+1. 从证券平台的官方开发者渠道取得 API 权限，确认支持目标市场及模拟账户。若使用网关型 API，按平台文档安装并登录本机网关；若使用 Key / Secret、OAuth 或签名型 API，须为其实现对应适配器。不要把证券账户密码或 API 密钥写入源码。
+2. 检查适配器是否匹配该平台及账户实体。新增适配器应先完成只读检查，再在平台模拟环境验证下单、撤单、部分成交、未知回包恢复和完整对账。
+3. 安装当前项目依赖，并对附带的本地网关适配器运行只读诊断：
 
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-```
-
-### 2. 安装并登录官方 OpenD
-
-从 [moomoo 官方下载页](https://www.moomoo.com/download/OpenAPI) 安装 OpenD。在 **OpenD 自己的窗口**登录你的 moomoo 账户并完成验证。仅登录普通证券客户端不能代替 OpenD 登录。
-
-本项目默认连接 `127.0.0.1:11111`，不要开放公网监听。这套连接使用 OpenD 的登录会话，不需要在本项目填写 Binance 式的 API Key / Secret，也不应把证券登录密码写进源码或提交到 GitHub。架构和权限以 [官方 API 文档](https://openapi.moomoo.com/moomoo-api-doc/en/intro/intro.html) 为准。
-
-### 3. 只读检查连接和权限
-
-在项目根目录执行：
-
-```sh
 .venv/bin/python connect.py --port 11111 --quotes --accounts
 .venv/bin/python trade.py --port 11111 doctor
 ```
 
-这些诊断不启动自动策略。先确认网关、行情登录、交易登录和模拟账户权限；客户端能看见的行情不一定有 API 权限，行情缺失不能当作已连接成功。
+这些命令针对当前网关适配器，**不是任意平台通用的连接命令**。默认连接 `127.0.0.1:11111`，不要向公网开放；`doctor` 不启动自动策略。接入细节见 [适配器说明](docs/broker-adapters.md)。
 
-### 4. 使用你自己的模拟账户配置
-
-`trading/config.example.json` 是配置示例，`live_stocks` 和 `live_options` 均保持 `false`。诊断可指定自己的配置：
+4. 使用自己的配置与 SIMULATE 账户绑定。`trading/config.example.json` 中 `live_stocks` 和 `live_options` 保持 `false`：
 
 ```sh
 cp trading/config.example.json data-local-config.json
 .venv/bin/python trade.py --config data-local-config.json --port 11111 doctor
 ```
 
-预算字段和风控上限需通过 `Config.validate()`，旧示例使用 NZD 口径，不等于截图所示已迁移的独立 USD 账本。公开仓库没有原运行账本，不会因填写配置自动获得截图中的部署状态。账户绑定必须使用你通过 OpenD 查询到的 **SIMULATE** 账户，US 与 HK 分别核验；示例 `000001` / `000002` 不能直接使用，也不要重置已有账本来绕过绑定检查。
+配置须通过 `Config.validate()`。旧示例使用 NZD 口径，不代表截图已迁移的独立 USD 账本。公开克隆不含原账本、账户绑定或验收证据；示例账号 `000001`（US）、`000002`（HK）必须替换并核验，不可重置已有账本绕过检查。
 
-当前证券适配器 `trading/moomoo.py` 的交易上下文使用 `SecurityFirm.FUTUAU` 并核对市场权限；其他地区/券商实体的账户不能假定直接兼容，需要先按官方文档核验并适配。官方 API 支持某类期货不代表本项目已经实现期货执行；本项目仍拒绝 FUTURE 新开仓。
+## 连接自己的 AI 分析 API（可选、只读）
 
-## 配置自己的 AI 分析 API（可选、只读）
+当前新闻监测使用规则分析。独立研究入口 `trading/ai_analysis.py` 支持兼容 Chat Completions 的模型服务，**尚无 GUI 密钥设置页，也没有将 AI 输出接入自动下单**。
 
-**证券控制台原有新闻功能是规则分析，不存在可以直接填写 AI Key 的 GUI 设置页。** 新增的 `trading/ai_analysis.py` 是独立命令行研究入口，不冒用币安工具的 AI 设置，也不会把回答接入买卖、仓位或风控控制。
-
-你需要从所选模型提供商取得：
-
-- 支持 Chat Completions 协议的 API 根地址，例如 `https://提供商域名/v1`；不要填写聊天网页地址。
-- 该账户实际支持的模型名称。
-- 该提供商的 API Key（与 moomoo 登录、证券权限完全不同）。
-
-运行示例（将地址和模型名称替换为自己的）：
+从模型服务商取得 API 根地址、支持的模型名和 API Key：
 
 ```sh
 .venv/bin/python -m trading.ai_analysis \
   --base-url https://provider.example/v1 \
   --model your-model-name \
-  --text '请分析我提供的公开公司公告，区分已知事实、推测、风险和失效条件。'
+  --text 'Analyze this public company announcement. Separate facts, assumptions, risks and invalidation conditions.'
 ```
 
-程序会隐藏输入地询问模型 Key，不保存密钥；也支持从 `AEGIS_AI_API_KEY` 环境变量读取。不要把 Key 写进命令参数、README 或 Git。公网接口必须 HTTPS，本机回环网关可用 HTTP；接口必须支持 `/chat/completions`，其他协议不能直接代入。
+将示例地址和模型替换为自己的。程序隐藏输入地询问密钥，不保存；也支持 `AEGIS_AI_API_KEY` 环境变量。公网接口必须 HTTPS，仅回环地址允许 HTTP；接口需支持 `/chat/completions`。证券 API 和 AI API 使用不同权限及凭据。
 
-只有执行该命令时才发送 `--text` 明确提供的材料及研究提示词，不自动读取账户、持仓、账本或证券凭据。请只提供允许发给该服务商的公开内容。服务商可能收费；请求45秒超时，不自动重试。输出默认中文，仅供研究，**不会自动下单，不改变证券策略**。此模块通过隔离假服务测试，未使用真实模型 Key 进行付费联调；GUI 集成尚未实现。
+仅发送你通过 `--text` 明确提供的材料，不自动读取账户、持仓、账本或证券凭据。默认英文输出，可在研究文本中指定语言。服务商可能收费；45 秒超时，不自动重试。只做隔离假服务测试，未用真实密钥进行付费联调。
 
-## 目录与启动
+## 目录与 Mac 启动
 
 | 路径 | 用途 |
 | --- | --- |
-| `trading/` | 美港股及期权行情、扫描、模拟执行、订单对账与风控 |
-| `binance_trader/` | 币安后台、策略、新闻、AI 过滤及网页界面 |
-| `desktop/` | 独立美港股 Mac 控制台（中文界面） |
-| `binance_trader/desktop/` | 币安 Mac 启动器、钥匙串组件及构建脚本 |
-| `tests/`、`binance_trader/tests/` | 回归测试 |
+| `desktop/QuantDesktop.swift` | 英文 Mac 证券控制台 |
+| `trading/` | 行情、扫描、模拟执行、对账、风控及只读 AI 研究 |
+| `tests/` | 回归测试 |
 | `examples/` | 人工合成演示数据 |
-| 根目录 Python 脚本 | 连接诊断、回测、验证与收益统计 |
+| 根目录 Python 脚本 | 连接诊断、回测与统计 |
 
-### 从美港股工具开始
-
-```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python trade.py doctor
-```
-
-需另外安装并登录官方 OpenD，具备相应行情和账户权限。先检查 `trading/config.example.json`，配置自己的本地模拟环境，再运行策略命令。`doctor` 进行诊断，不会启动自动策略。公开克隆不包含原账本、账户绑定及运行验收证据。
-
-### Mac 证券控制台
-
-操作控制台需要兼容的 Xcode/SwiftUI 工具链；当前本机 Command Line Tools 构建报告缺少 `SwiftUIMacros` 插件，不能声称操作控制台已重新构建成功。构建命令为：
+需要兼容的 macOS SDK 与 SwiftUI 工具链：
 
 ```sh
 zsh desktop/build.sh
+open AegisQuant.app
 ```
 
-生成 `量化控制台.app`，这是美港股证券控制台，目前界面仍为中文。此前新增的英文界面属于独立币安工具，不能表述为英文股票或期货控制台。本仓库不包含已构建的 App。
+构建生成 `AegisQuant.app`。正常启动会连接本机后台并按本地配置管理任务；先完成模拟环境配置和权限检查。`AEGIS_READ_ONLY=1` 启动应用可禁止其启动后台和发送操作请求，但需要已有状态服务才能显示数据。关闭窗口不会自动停止已运行的后台。
 
-### 可选的独立币安工具
-
-见 [币安工具说明](binance_trader/README.md)。它使用 `binance_trader/requirements.txt`、独立数据目录及单独执行权限，不是使用美港股研究与模拟工具的前提。
-
-本仓库是脱敏源码快照：不包含运行数据库、余额、成交历史、凭据、本机报告、依赖目录及已构建 App。部署代码和对应测试中的模拟账户编号已替换为示例 `000001`（US）和 `000002`（HK），部署前需配置并验证自己的账户绑定。
+这是脱敏源码快照，不包含运行数据库、余额、成交历史、凭据、依赖目录或已构建 App。仓库保留的其他独立工具不参与证券控制台的连接和执行。
 
 ## 版权、商业使用与来源标注 / Copyright, commercial use, and attribution
 
