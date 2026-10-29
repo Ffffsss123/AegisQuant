@@ -1,0 +1,97 @@
+Quant Trading — Attribution Required License v1.0
+量化交易项目来源标注许可 v1.0
+
+Copyright © 2026 Ffffsss123
+Original repository / 原始仓库:
+https://github.com/Ffffsss123/quant-trading
+
+1. Scope / 适用范围
+
+This license applies only to the original material in this repository that
+Ffffsss123 has the right to license. Third-party material remains subject to
+its respective license and notices. No ownership of third-party material is
+claimed. Rights not expressly granted are reserved.
+
+本许可仅适用于 Ffffsss123 有权授权的本仓库原创内容。第三方材料遵循其
+原有许可及声明，不据此主张第三方材料的所有权。未明确授予的权利保留。
+
+2. Permission / 使用授权
+
+Subject to all conditions below, you may use, reproduce, modify, create derivative
+works from, distribute, and incorporate the covered material into personal or
+commercial projects and services, including paid products and profit-generating
+trading activities. This license does not require publication of your own source
+code, trading records, or private operational data.
+
+在遵守下列全部条件的前提下，允许使用、复制、修改、二次开发、分发及将
+受许可内容用于个人或商业项目和服务，包括收费产品和盈利交易活动。
+本许可不要求公开使用者自己的源码、交易记录或私人运行数据。
+
+3. Mandatory attribution / 必须标注来源
+
+All use, including private use, personal rewrites, commercial use, and use for
+profit, must retain the author's name, copyright notice, original repository
+URL, and this license in the used copy's README or equivalent project notice.
+Redistributed source must retain these notices and a copy of this license.
+
+When software or a service using the covered material is made available to
+others, attribution must also be reasonably visible in its documentation and
+in a user-accessible About, Copyright, Credits, or equivalent page. If there is
+no interface, provide the notice in accompanying documentation. Attribution
+must not be hidden solely in inaccessible source code or internal records.
+
+Required attribution may use this wording or an equivalent with the same facts:
+"Based on or uses Quant Trading by Ffffsss123.
+Original source: https://github.com/Ffffsss123/quant-trading
+Copyright © 2026 Ffffsss123. Subject to the original repository LICENSE."
+
+任何使用，包括个人自用、个人改写、商业使用和盈利使用，均须在所使用副本
+的 README 或等效项目声明中保留作者、版权、原始仓库链接和本许可。
+分发源码时必须保留上述声明及本许可副本。
+
+向他人提供软件或服务时，还须在使用文档及用户可访问的“关于、版权、致谢”
+或等效页面显著标注来源；没有界面时，应在随附文档中标注。不得仅将声明
+隐藏在用户无法访问的源码或内部记录中。
+
+可采用以下文字，或包含相同事实的等效表述：
+“本项目基于 Ffffsss123 的 Quant Trading 项目开发或使用。
+原始仓库：https://github.com/Ffffsss123/quant-trading
+Copyright © 2026 Ffffsss123。使用须遵守原仓库 LICENSE。”
+
+4. Modified versions and downstream terms / 修改版本与后续分发
+
+Identify modified versions as modified. Do not remove or misrepresent the original
+authorship or claim the covered material as wholly your own original work.
+Downstream terms must preserve the attribution obligations for covered material.
+No right to imply endorsement by the author is granted.
+
+修改版本须注明已经修改。不得删除或歪曲原作者身份，不得将受许可内容冒充为
+完全独立原创。后续分发条款须保留受许可内容的来源标注义务。
+本许可不授予暗示作者背书的权利。
+
+5. Breach and enforcement / 违约与维权
+
+The permissions granted by this license terminate upon failure to comply with
+its conditions. Subject to applicable law, the author reserves the right to
+seek cessation of unauthorized use, damages, and other available remedies,
+including bringing legal proceedings. This clause does not limit rights or
+exceptions that cannot be restricted under applicable law.
+
+不遵守本许可条件时，本许可授予的使用权终止。作者保留依据适用法律要求
+停止未经授权的使用、请求损害赔偿及其他可用救济的权利，包括提起诉讼。
+本条不限制适用法律中不可被排除或限制的权利及例外。
+
+6. No warranty / 不作保证
+
+The material is provided "AS IS", without warranties, to the extent permitted
+by applicable law. No guarantee of profitability, fitness for trading, accuracy,
+or uninterrupted operation is given. To the extent permitted by applicable law,
+the author is not liable for losses arising from use of the material.
+
+在适用法律允许的范围内，本材料按“现状”提供，不对盈利能力、交易适用性、
+准确性或持续运行作出保证；作者不对使用本材料导致的损失承担责任。
+
+7. Language / 语言
+
+The Chinese text controls if the two language versions conflict.
+中英文有冲突时，以中文为准。

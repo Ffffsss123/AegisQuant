@@ -1,27 +1,100 @@
-# Quant Trading
+# Quant Trading｜量化交易研究与模拟系统
 
-Quantitative trading research, simulation, and macOS desktop tools for US/HK stocks, US options, and Binance.
+美股、港股、美国期权及币安商品合约的量化研究、模拟交易与 macOS 桌面工具。项目将行情、新闻、策略信号、仓位控制、订单执行和账本对账串联起来。公开代码不代表已经完成实盘或券商实际成交验收，也不承诺收益。
 
-## Project layout
+## 基本运行逻辑
 
-- `trading/`: market data, screening, simulation, broker transport, reconciliation, and risk controls.
-- `binance_trader/`: Binance desktop backend and browser interface; see its README for usage.
-- `desktop/`: native macOS console source and build script.
-- `tests/` and `binance_trader/tests/`: regression tests.
-- `examples/`: synthetic demonstration data.
-- Top-level Python scripts: connection diagnostics, backtesting, validation, and reports.
+```text
+行情 / 历史 K 线 / 新闻
+          ↓
+数据完整性、时效、品种与交易时段检查
+          ↓
+策略信号 + 新闻方向 / 风险过滤
+          ↓
+预算、仓位、亏损阈值与暂停状态检查
+          ↓
+模拟执行或已明确启用的交易通道
+          ↓
+查询订单 → 核验成交 → 更新持仓与账本
+          ↓
+止损 / 止盈 / 趋势反转 / 到期退出 → 对账
+```
 
-## Python setup
+1. **启动与恢复**：读取本机配置和持久化账本，恢复已知订单及持仓。连接账户、保存设置或恢复凭据，不等于启动新开仓。
+2. **收集与检查**：读取行情、已收盘 K 线和新闻；数据过期、扫描不完整、品种身份未核实或账户状态异常时，阻止新开仓。
+3. **形成决策**：策略先产生候选方向，再检查新闻、资金、交易时段、仓位和亏损限制。信号成立仍可能因风控被拒绝。
+4. **执行与核对**：记录下单意图和回包，查询真实订单状态，以核验结果更新账本。超时或结果未知时先查询、保留证据，避免盲目重发。
+5. **持续管理**：后台管理已有仓位、保护单、撤单及对账。暂停新开仓不等于已经平仓；关闭网页也不等于后台已经停止。
+
+各通道使用各自的配置、账户状态与执行保护。下述规则描述当前公开源码，实际参数以对应模块和本机配置为准。
+
+## 交易逻辑
+
+### 美股股票
+
+- 采用做多的短期波段框架：基于已完成交易日的数据检查基础趋势、流动性及此前 5 个交易日高点突破。
+- 可选高波动趋势筛选，结合 ATR 占比、趋势效率等指标排序；完整扫描和合格历史数据是准入前提。
+- 仓位按可用预算、计划止损距离、手续费及滑点预留共同计算，不能仅按余额满仓买入。
+- 波段模型的初始止损距离为 `1.5 × ATR14`，目标距离为 `3 × ATR14`；止损、止盈、趋势反转，或持有达到 5 个交易日且临近收盘时触发退出判断。
+- 执行前再次核对新鲜双边报价、限价、市场日历、新闻和联合账户风险；先处理到期撤单及已有持仓退出，再考虑新开仓。
+
+### 港股股票
+
+- 使用核验后的香港交易日历及完整的上一交易日信号，检查做多信号、流动性和候选身份。
+- 执行还需满足连续交易时段、整手股数、合法价位、费用、独立预算及账户对账要求。
+- 已有持仓的退出管理独立于新的候选名单；缺少开仓条件时不会据此忽略持仓管理。
+
+### 美国期权
+
+- 当前独立期权流程主要用于 **SIMULATE 传输验收**，不是已验证盈利的期权策略。
+- 按 `撤单测试 → 撤单确认 → 买入 → 买入确认 → 卖出 → 卖出确认 → 完整对账` 推进。
+- 合约、报价、独立预算和持仓必须再次核验；未成交、回包不明或未知订单不能直接视为成功，也不能自动补发替代订单。
+
+### 币安商品合约
+
+- 交易范围限制在源码允许的黄金、白银、WTI 原油、布伦特原油和天然气商品合约；一次启用一个品种、管理一笔持仓，交易所未提供对应产品时拒绝开仓。
+- 使用已收盘 K 线。基础突破信号结合 `EMA20 / EMA60` 趋势和此前 20 根 K 线高低点；只在该周期允许的收盘后窗口评估新仓。
+- 有已核验新闻方向时，要求突破方向一致。只有新闻采集健康且明确允许 K 线回退时，才采用单独的 K 线突破；新闻缺失或风险阻断不能当作回退许可。
+- 已启用的 AI 综合方向只是额外过滤条件，仍须通过新闻健康、风险检查及同向已收盘突破；模型文字本身不能直接下单。
+- 初始止损距离取 `2 × ATR14` 与价格 `1%` 的较大值；距离超过 `8%` 时跳过，止盈距离为止损距离的两倍。不以摊平加仓替代止损。
+- 仓位结合单笔计划损失、费用、滑点、资金费、保证金、杠杆和交易所数量步长计算；每日或累计亏损限制触发后锁定新开仓。
+- 同根 K 线防止重复开仓；未知订单持久锁定。Demo / 实盘的开仓、保护单、退出和远端持仓需核对，本地模拟不能复现完整订单簿及真实清算路径。
+
+## 目录与启动
+
+| 路径 | 用途 |
+| --- | --- |
+| `trading/` | 美港股及期权行情、扫描、模拟执行、订单对账与风控 |
+| `binance_trader/` | 币安后台、策略、新闻、AI 过滤及网页界面 |
+| `desktop/` | macOS 控制台源码和构建脚本 |
+| `tests/`、`binance_trader/tests/` | 回归测试 |
+| `examples/` | 人工合成演示数据 |
+| 根目录 Python 脚本 | 连接诊断、回测、验证与收益统计 |
 
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
+
+# 币安工具：首次使用先检查本地模拟环境与配置
+.venv/bin/python -m binance_trader
 ```
 
-Broker access requires the official software, an appropriate account, and separately configured permissions. Review `trading/config.example.json` before configuring a local environment. Run diagnostics and simulation before enabling any execution.
+币安界面默认本机地址为 `http://127.0.0.1:8766`，详见 [币安工具说明](binance_trader/README.md)。美港股接入需安装官方 OpenD 并具备对应行情及账户权限，配置示例见 `trading/config.example.json`。从模拟环境和只读诊断开始，启用真实交易须另行明确配置及操作。
 
-## Public source snapshot
+本仓库是脱敏源码快照：不包含运行数据库、余额、成交历史、凭据、本机报告、依赖目录及已构建 App。部署代码和对应测试中的模拟账户编号已替换为示例 `000001`（US）和 `000002`（HK），部署前需配置并验证自己的账户绑定。
 
-This repository contains a sanitized source snapshot. Runtime databases, account balances, order history, credentials, local reports, dependencies, and built application bundles are excluded. Local simulated account bindings in deployment code and its regression tests were replaced with the example IDs `000001` (US) and `000002` (HK). Configure and validate your own bindings before attempting a deployment.
+## 版权、商业使用与来源标注
 
-The source snapshot does not establish live-trading readiness or successful broker execution acceptance. Keep real trading disabled during setup and testing. No license grant has been added.
+**Copyright © 2026 Ffffsss123。保留所有权利；使用许可仅按本仓库 [LICENSE](LICENSE) 授予。** 本声明适用于作者有权授权的原创部分，第三方组件仍遵循各自许可。
+
+允许个人使用、学习、修改、二次开发、商业使用及盈利，但上述使用均必须明确注明原作者和本仓库来源。商业产品、收费服务、量化交易盈利使用、个人改写、转载、复制或分发均不得删除或隐瞒来源，也不得把原作者的作品冒充为完全独立原创。
+
+请保留以下声明及可访问的原仓库链接：
+
+> 本项目基于 Ffffsss123 的 Quant Trading 项目开发或使用。
+> 原始仓库：https://github.com/Ffffsss123/quant-trading
+> Copyright © 2026 Ffffsss123。使用须遵守原仓库 LICENSE。
+
+对外提供软件或服务时，请在 README / 使用文档及用户可查看的“关于 / 版权 / 致谢”页面保留该声明；分发源码时，还须保留版权和 LICENSE。个人自用或仅用于自身交易盈利且不对外分发时，应在所使用副本的 README 或等效项目说明中保留声明，不要求公开交易记录。
+
+修改版本须注明已经修改，不得暗示原作者为其背书。**不履行来源标注或其他许可条件的行为不在本许可授权范围内；作者保留依法要求停止使用、追究责任及提起诉讼的权利。** 完整条款以 [LICENSE](LICENSE) 为准。
