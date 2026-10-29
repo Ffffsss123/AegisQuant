@@ -1,89 +1,112 @@
-# Quant Trading｜量化交易研究与模拟系统
+# Quant Trading
 
-美股、港股、美国期权及币安商品合约的量化研究、模拟交易与 macOS 桌面工具。项目将行情、新闻、策略信号、仓位控制、订单执行和账本对账串联起来。公开代码不代表已经完成实盘或券商实际成交验收，也不承诺收益。
+**English** | [简体中文](README.zh-CN.md)
 
-## 基本运行逻辑
+Quantitative research, simulation, and macOS desktop tools for US stocks, Hong Kong stocks, US options, and Binance commodity contracts. The system connects market data, news, strategy signals, position sizing, order execution, and ledger reconciliation. This public source snapshot does not establish live-trading readiness or successful broker execution acceptance, and does not promise returns.
+
+## Runtime workflow
 
 ```text
-行情 / 历史 K 线 / 新闻
-          ↓
-数据完整性、时效、品种与交易时段检查
-          ↓
-策略信号 + 新闻方向 / 风险过滤
-          ↓
-预算、仓位、亏损阈值与暂停状态检查
-          ↓
-模拟执行或已明确启用的交易通道
-          ↓
-查询订单 → 核验成交 → 更新持仓与账本
-          ↓
-止损 / 止盈 / 趋势反转 / 到期退出 → 对账
+Market data / historical candles / news
+                  ↓
+Validate completeness, freshness, instruments, and trading sessions
+                  ↓
+Strategy signals + news direction / risk filters
+                  ↓
+Check budgets, positions, loss limits, and pause controls
+                  ↓
+Simulation or an explicitly enabled execution channel
+                  ↓
+Query orders → verify fills → update positions and ledgers
+                  ↓
+Stop loss / take profit / trend reversal / time exit → reconcile
 ```
 
-1. **启动与恢复**：读取本机配置和持久化账本，恢复已知订单及持仓。连接账户、保存设置或恢复凭据，不等于启动新开仓。
-2. **收集与检查**：读取行情、已收盘 K 线和新闻；数据过期、扫描不完整、品种身份未核实或账户状态异常时，阻止新开仓。
-3. **形成决策**：策略先产生候选方向，再检查新闻、资金、交易时段、仓位和亏损限制。信号成立仍可能因风控被拒绝。
-4. **执行与核对**：记录下单意图和回包，查询真实订单状态，以核验结果更新账本。超时或结果未知时先查询、保留证据，避免盲目重发。
-5. **持续管理**：后台管理已有仓位、保护单、撤单及对账。暂停新开仓不等于已经平仓；关闭网页也不等于后台已经停止。
+1. **Start and recover:** load local configuration and persistent ledgers, then recover known orders and positions. Connecting an account, saving settings, or restoring credentials does not start new entries.
+2. **Collect and validate:** read quotes, closed candles, and news. Stale data, incomplete scans, unverified instruments, or abnormal account states block new entries.
+3. **Evaluate:** generate candidate signals, then check news, capital, market sessions, position limits, and loss controls. A valid signal can still be rejected by risk checks.
+4. **Execute and reconcile:** persist order intent and responses, query order status, and update the ledger from verified results. A timeout or unknown result requires investigation before any retry.
+5. **Manage positions:** continue position protection, cancellation, and reconciliation. Pausing new entries does not mean positions are closed; closing a browser page does not stop the backend.
 
-各通道使用各自的配置、账户状态与执行保护。下述规则描述当前公开源码，实际参数以对应模块和本机配置为准。
+Each channel has its own configuration, account state, and execution safeguards. The rules below describe the published source; the corresponding modules and local configuration determine actual parameters.
 
-## 交易逻辑
+## Trading logic
 
-### 美股股票
+### US stocks
 
-- 采用做多的短期波段框架：基于已完成交易日的数据检查基础趋势、流动性及此前 5 个交易日高点突破。
-- 可选高波动趋势筛选，结合 ATR 占比、趋势效率等指标排序；完整扫描和合格历史数据是准入前提。
-- 仓位按可用预算、计划止损距离、手续费及滑点预留共同计算，不能仅按余额满仓买入。
-- 波段模型的初始止损距离为 `1.5 × ATR14`，目标距离为 `3 × ATR14`；止损、止盈、趋势反转，或持有达到 5 个交易日且临近收盘时触发退出判断。
-- 执行前再次核对新鲜双边报价、限价、市场日历、新闻和联合账户风险；先处理到期撤单及已有持仓退出，再考虑新开仓。
+- A long-only short-term swing framework checks the underlying trend, liquidity, and a breakout above the previous five sessions' highs using completed daily data.
+- An optional volatile-trend filter ranks candidates using ATR percentage and trend efficiency. Complete scans and qualified historical data are required for entry.
+- Position size accounts for available capital, planned stop distance, fees, and slippage reserves.
+- The swing model uses an initial stop distance of `1.5 × ATR14` and a target distance of `3 × ATR14`. Exit checks cover stops, targets, trend reversal, and a maximum five-session holding period near the close.
+- Execution rechecks fresh two-sided quotes, limit prices, market calendars, news, and joint-account risk. Expired-order cancellation and existing-position exits take priority over new entries.
 
-### 港股股票
+### Hong Kong stocks
 
-- 使用核验后的香港交易日历及完整的上一交易日信号，检查做多信号、流动性和候选身份。
-- 执行还需满足连续交易时段、整手股数、合法价位、费用、独立预算及账户对账要求。
-- 已有持仓的退出管理独立于新的候选名单；缺少开仓条件时不会据此忽略持仓管理。
+- Entry checks use a verified Hong Kong trading calendar and a complete previous-session scan, including long signals, liquidity, and candidate identity.
+- Execution also requires a continuous trading session, valid board lots and price ticks, fee reserves, an independent budget, and account reconciliation.
+- Existing-position exits are managed independently of the current entry candidate list.
 
-### 美国期权
+### US options
 
-- 当前独立期权流程主要用于 **SIMULATE 传输验收**，不是已验证盈利的期权策略。
-- 按 `撤单测试 → 撤单确认 → 买入 → 买入确认 → 卖出 → 卖出确认 → 完整对账` 推进。
-- 合约、报价、独立预算和持仓必须再次核验；未成交、回包不明或未知订单不能直接视为成功，也不能自动补发替代订单。
+- The independent options flow primarily performs **SIMULATE transport acceptance**, rather than representing a validated profitable options strategy.
+- Its sequence is `cancellation test → cancellation confirmation → buy → buy confirmation → sell → sell confirmation → full reconciliation`.
+- Contracts, quotes, independent budgets, and positions are revalidated. Unfilled or unknown orders do not count as success and must not trigger blind replacement orders.
 
-### 币安商品合约
+### Binance commodity contracts
 
-- 交易范围限制在源码允许的黄金、白银、WTI 原油、布伦特原油和天然气商品合约；一次启用一个品种、管理一笔持仓，交易所未提供对应产品时拒绝开仓。
-- 使用已收盘 K 线。基础突破信号结合 `EMA20 / EMA60` 趋势和此前 20 根 K 线高低点；只在该周期允许的收盘后窗口评估新仓。
-- 有已核验新闻方向时，要求突破方向一致。只有新闻采集健康且明确允许 K 线回退时，才采用单独的 K 线突破；新闻缺失或风险阻断不能当作回退许可。
-- 已启用的 AI 综合方向只是额外过滤条件，仍须通过新闻健康、风险检查及同向已收盘突破；模型文字本身不能直接下单。
-- 初始止损距离取 `2 × ATR14` 与价格 `1%` 的较大值；距离超过 `8%` 时跳过，止盈距离为止损距离的两倍。不以摊平加仓替代止损。
-- 仓位结合单笔计划损失、费用、滑点、资金费、保证金、杠杆和交易所数量步长计算；每日或累计亏损限制触发后锁定新开仓。
-- 同根 K 线防止重复开仓；未知订单持久锁定。Demo / 实盘的开仓、保护单、退出和远端持仓需核对，本地模拟不能复现完整订单簿及真实清算路径。
+- The source allows gold, silver, WTI crude, Brent crude, and natural gas contracts, with one enabled instrument and one position at a time. Unsupported exchange products are rejected.
+- Signals use closed candles, `EMA20 / EMA60` trend checks, and breakouts of the previous 20 candles' highs or lows. New entries are evaluated only within the configured post-close window.
+- When verified news provides a direction, the breakout must agree. A candle-only fallback requires healthy news collection and explicit fallback permission; missing news or a blocking risk does not grant that permission.
+- An enabled AI direction is an additional filter. Healthy news, risk checks, and a matching closed-candle breakout remain required; model prose cannot place an order by itself.
+- Initial stop distance is the greater of `2 × ATR14` and `1%` of price. Trades with a stop distance above `8%` are skipped; the target distance is twice the stop distance. The strategy does not average down to replace a stop.
+- Sizing incorporates planned loss, fees, slippage, funding, margin, leverage, and exchange quantity increments. Daily or cumulative loss limits lock new entries.
+- The same candle cannot repeatedly open positions. Unknown orders create a persistent lock. Demo and live fills, protective orders, exits, and remote positions require verification; local simulation cannot reproduce a complete order book or real liquidation paths.
 
-## 目录与启动
+## Layout and setup
 
-| 路径 | 用途 |
+| Path | Purpose |
 | --- | --- |
-| `trading/` | 美港股及期权行情、扫描、模拟执行、订单对账与风控 |
-| `binance_trader/` | 币安后台、策略、新闻、AI 过滤及网页界面 |
-| `desktop/` | macOS 控制台源码和构建脚本 |
-| `tests/`、`binance_trader/tests/` | 回归测试 |
-| `examples/` | 人工合成演示数据 |
-| 根目录 Python 脚本 | 连接诊断、回测、验证与收益统计 |
+| `trading/` | US/HK equities and options data, scanning, simulation, reconciliation, and risk controls |
+| `binance_trader/` | Binance backend, strategy, news, AI filters, and browser interface |
+| `desktop/` | macOS console source and build scripts |
+| `tests/`, `binance_trader/tests/` | Regression tests |
+| `examples/` | Synthetic demonstration data |
+| Top-level Python scripts | Connection diagnostics, backtests, validation, and return reports |
 
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 
-# 币安工具：首次使用先检查本地模拟环境与配置
+# Check local simulation mode and configuration before starting.
 .venv/bin/python -m binance_trader
 ```
 
-币安界面默认本机地址为 `http://127.0.0.1:8766`，详见 [币安工具说明](binance_trader/README.md)。美港股接入需安装官方 OpenD 并具备对应行情及账户权限，配置示例见 `trading/config.example.json`。从模拟环境和只读诊断开始，启用真实交易须另行明确配置及操作。
+The Binance interface defaults to `http://127.0.0.1:8766`; see the [Binance tool guide (Chinese)](binance_trader/README.md). US/HK broker integration requires official OpenD software and appropriate account/data permissions. See `trading/config.example.json`. Begin with simulation and read-only diagnostics; live execution requires separate explicit configuration and actions.
 
-本仓库是脱敏源码快照：不包含运行数据库、余额、成交历史、凭据、本机报告、依赖目录及已构建 App。部署代码和对应测试中的模拟账户编号已替换为示例 `000001`（US）和 `000002`（HK），部署前需配置并验证自己的账户绑定。
+This is a sanitized source snapshot. Runtime databases, balances, trade history, credentials, local reports, dependencies, and built application bundles are excluded. Simulated account bindings in deployment code and its tests use example IDs `000001` (US) and `000002` (HK). Configure and validate your own bindings before deployment.
 
-## 版权、商业使用与来源标注
+## Copyright, commercial use, and attribution / 版权、商业使用与来源标注
+
+### English
+
+**Copyright © 2026 Ffffsss123. All rights reserved except as expressly granted by the repository [LICENSE](LICENSE).** This notice covers original material the author has the right to license. Third-party components remain subject to their own licenses.
+
+Personal use, study, modification, derivative development, commercial use, and profit-generating use are permitted only with clear attribution to the original author and this repository. Paid products, services, trading for profit, personal rewrites, republication, copying, and redistribution must retain the source and must not present the author's work as wholly independent original work.
+
+Retain this notice and an accessible original repository link:
+
+> Based on or uses Quant Trading by Ffffsss123.
+>
+> Original source: https://github.com/Ffffsss123/quant-trading
+>
+> Copyright © 2026 Ffffsss123. Subject to the original repository LICENSE.
+
+When providing software or services to others, include attribution in the README / documentation and a user-accessible About, Copyright, or Credits page. Source distributions must also retain the copyright and LICENSE. Private use or trading solely for your own profit requires retaining the notice in the used copy's README or equivalent project documentation, without publishing trading records.
+
+Identify modified versions as modified and do not imply the author's endorsement. **Use that fails to satisfy attribution or other license conditions is outside the permission granted; the author reserves the right to seek cessation, pursue liability, and bring legal proceedings under applicable law.** See [LICENSE](LICENSE) for the complete terms.
+
+### 简体中文
+
 
 **Copyright © 2026 Ffffsss123。保留所有权利；使用许可仅按本仓库 [LICENSE](LICENSE) 授予。** 本声明适用于作者有权授权的原创部分，第三方组件仍遵循各自许可。
 
