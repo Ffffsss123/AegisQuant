@@ -1,4 +1,4 @@
-# Quant Trading
+# AegisQuant
 
 **English** | [简体中文](README.zh-CN.md)
 
@@ -95,9 +95,9 @@ Personal use, study, modification, derivative development, commercial use, and p
 
 Retain this notice and an accessible original repository link:
 
-> Based on or uses Quant Trading by Ffffsss123.
+> Based on or uses AegisQuant by Ffffsss123.
 >
-> Original source: https://github.com/Ffffsss123/quant-trading
+> Original source: https://github.com/Ffffsss123/AegisQuant
 >
 > Copyright © 2026 Ffffsss123. Subject to the original repository LICENSE.
 
@@ -114,8 +114,8 @@ Identify modified versions as modified and do not imply the author's endorsement
 
 请保留以下声明及可访问的原仓库链接：
 
-> 本项目基于 Ffffsss123 的 Quant Trading 项目开发或使用。
-> 原始仓库：https://github.com/Ffffsss123/quant-trading
+> 本项目基于 Ffffsss123 的 AegisQuant 项目开发或使用。
+> 原始仓库：https://github.com/Ffffsss123/AegisQuant
 > Copyright © 2026 Ffffsss123。使用须遵守原仓库 LICENSE。
 
 对外提供软件或服务时，请在 README / 使用文档及用户可查看的“关于 / 版权 / 致谢”页面保留该声明；分发源码时，还须保留版权和 LICENSE。个人自用或仅用于自身交易盈利且不对外分发时，应在所使用副本的 README 或等效项目说明中保留声明，不要求公开交易记录。
