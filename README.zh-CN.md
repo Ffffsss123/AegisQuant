@@ -11,9 +11,23 @@
 | 美股股票 | 全市场筛选、做多波段模拟、风控与券商对账 |
 | 港股股票 | 交易日历、整手及价位检查、模拟执行与对账 |
 | 美国期权 | 合约研究及明确授权的 SIMULATE 订单传输验收 |
-| 期货 | 研究与接入能力检查；执行能力和独立预算尚未验证，未启用自动期货执行 |
+| 期货 | 仅有 FUTURE 记账分类预留和研究范围；无期货执行后台，也无已验证或已分配的执行资金通道 |
 
 公开源码不代表已完成实盘准备、券商成交验收或盈利验证。`binance_trader/` 是仓库内另一个可选商品合约工具，其界面不能代表美港股证券控制台。
+
+## 股票控制台能力预览
+
+![AegisQuant 证券控制台能力预览](docs/images/aegisquant-securities-capabilities.png)
+
+根据 `trading.market_capabilities` 生成的原生只读能力查看器（独立范围展示页，不是实际交易操作面板），不读取账户数据、不启动交易后台。此图展示源码能力边界，不代表成交、盈利或期货执行验收；原操作控制台仍保留中文界面。
+
+可从源码查询同一能力声明：
+
+```sh
+python3 -m trading.market_capabilities
+# Build the separate native read-only viewer on macOS:
+zsh desktop/build_capabilities_preview.sh
+```
 
 ## 基本运行逻辑
 
@@ -91,7 +105,7 @@ python3 -m venv .venv
 
 ### Mac 证券控制台
 
-在已安装 Apple Command Line Tools 的 macOS 上运行：
+操作控制台需要兼容的 Xcode/SwiftUI 工具链；当前本机 Command Line Tools 构建报告缺少 `SwiftUIMacros` 插件，不能声称操作控制台已重新构建成功。构建命令为：
 
 ```sh
 zsh desktop/build.sh

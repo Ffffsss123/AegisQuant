@@ -1,0 +1,29 @@
+"""Declared securities execution scope; product slots are not trading permission.
+
+FUTURE in simulation_slots is an accounting category only. Binance commodity
+perpetuals belong to the separate binance_trader application and never confer
+execution capability on this securities system.
+"""
+import json
+
+
+def market_capabilities():
+    return {
+        'system': 'AegisQuant securities',
+        'live_execution_enabled': False,
+        'markets': [
+            {'market': 'US stocks', 'scope': 'Simulation execution and reconciliation',
+             'category': 'US_STOCK', 'simulation_execution': True},
+            {'market': 'Hong Kong stocks', 'scope': 'Simulation execution and reconciliation',
+             'category': 'HK_STOCK', 'simulation_execution': True},
+            {'market': 'US options', 'scope': 'Research and explicit simulation transport acceptance',
+             'category': 'OPTION', 'simulation_execution': True},
+            {'market': 'Futures', 'scope': 'Research only; execution and budget unverified',
+             'category': 'FUTURE', 'simulation_execution': False},
+        ],
+        'note': 'Capabilities describe code paths, not completed execution acceptance or profitability.',
+    }
+
+
+if __name__ == '__main__':
+    print(json.dumps(market_capabilities(), indent=2))

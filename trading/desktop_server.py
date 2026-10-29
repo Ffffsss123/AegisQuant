@@ -6,6 +6,7 @@ from datetime import datetime,timezone,timedelta
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from .position_display import simulation_details,external_details
 from .policy import Config
+from .market_capabilities import market_capabilities
 
 ROOT=Path(__file__).resolve().parents[1];DATA=ROOT/'data/desktop';PYTHON=ROOT/'.venv/bin/python'
 COMMANDS={'hk_execution':['-m','trading.hk_execution'],'hk_scan':['-m','trading.hk_scan'],'hk_catalog':['-m','trading.hk_catalog'],'option_transport':['-m','trading.option_transport'],'options':['-m','trading.options_observer'],'scan':['-m','trading.prepare_scan'],'news':['-m','trading.desktop_news'],
@@ -169,7 +170,7 @@ class Controller:
         sources=[dict(name=k,**v) for k,v in news.get('health',{}).items() if not k.startswith('US.')]
         events=sorted(news.get('events',[]),key=lambda x:x.get('observed_at',''),reverse=True)[:150]
         # No account IDs or credentials exposed to the client.
-        return dict(updated_at=datetime.now(timezone.utc).isoformat(),live_enabled=False,display_currency='USD',funding=funding,simulation_total_budget_usd=simulation_total,independent_budget_display=independent,budget_usd=paper.get('initial',600),loss_limit_usd=paper.get('loss_limit',30),single_risk_usd=min(paper.get('initial',600)*.025,paper.get('loss_limit',30)),
+        return dict(market_capabilities=market_capabilities(),updated_at=datetime.now(timezone.utc).isoformat(),live_enabled=False,display_currency='USD',funding=funding,simulation_total_budget_usd=simulation_total,independent_budget_display=independent,budget_usd=paper.get('initial',600),loss_limit_usd=paper.get('loss_limit',30),single_risk_usd=min(paper.get('initial',600)*.025,paper.get('loss_limit',30)),
             running={k:self.running(k) for k in COMMANDS},message=self.last_message,scan=dict({k:scan.get(k) for k in ('date','complete','history_count','eligible_count','errors','processed_count','excluded_count','pending_count','status_counts','source')},candidate_count=len(shown_candidates)),
             scan_schedule=read_json(ROOT/'data/trading/scan_schedule.json'),automation=read_json(ROOT/'data/trading/automation.json'),strategy=read_json(ROOT/'data/trading/strategy.report.json'),option_transport=read_json(ROOT/'data/trading/option_transport.report.json'),options=read_json(ROOT/'data/trading/options.report.json'),paper_paused=paper.get('paused',False),
             inventory=prep.get('snapshot_count',0),candidates=shown_candidates[:50],swing_research=read_json(ROOT/'data/trading/swing_research.json'),probe=probe,probe_paused=probe_state.get('paused',False),

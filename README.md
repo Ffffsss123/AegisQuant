@@ -11,9 +11,23 @@ Quantitative research and simulation for **US and Hong Kong stocks, US options, 
 | US stocks | Screening, long-only swing simulation, risk controls, and broker reconciliation |
 | Hong Kong stocks | Calendar-aware scanning, board-lot/tick validation, simulation execution, and reconciliation |
 | US options | Contract research and explicit SIMULATE order-transport acceptance |
-| Futures | Research and connectivity/capability checks; execution capability and budget are not verified, so automated futures execution is not enabled |
+| Futures | Reserved FUTURE accounting category and research scope only; no futures execution runner or funded/verified execution channel |
 
 This public source snapshot does not establish live-trading readiness, completed broker execution acceptance, or profitability. The separate `binance_trader/` directory contains an optional commodity-contract tool; its interface is not the US/HK securities console.
+
+## Securities console capability preview
+
+![AegisQuant securities capability preview](docs/images/aegisquant-securities-capabilities.png)
+
+Actual native read-only capability viewer generated from `trading.market_capabilities`; this is a separate scope viewer, not the operational trading dashboard. This read-only view loads no account data and starts no trading backend. It shows code scope, not filled orders, profitability, or futures execution acceptance. The operational console retains its existing Chinese interface.
+
+Inspect the same declared scope from source:
+
+```sh
+python3 -m trading.market_capabilities
+# Build the separate native read-only viewer on macOS:
+zsh desktop/build_capabilities_preview.sh
+```
 
 ## Runtime workflow
 
@@ -91,7 +105,7 @@ Install and sign in to official OpenD separately. Appropriate market-data and ac
 
 ### macOS securities console
 
-On macOS with Apple's Command Line Tools installed:
+The operational console requires a compatible Xcode/SwiftUI toolchain. The current local Command Line Tools build reports a missing `SwiftUIMacros` plugin; a successful operational-console rebuild is not claimed. Its build command is:
 
 ```sh
 zsh desktop/build.sh
