@@ -4,6 +4,12 @@
 
 Quantitative research, simulation, and macOS desktop tools for US stocks, Hong Kong stocks, US options, and Binance commodity contracts. The system connects market data, news, strategy signals, position sizing, order execution, and ledger reconciliation. This public source snapshot does not establish live-trading readiness or successful broker execution acceptance, and does not promise returns.
 
+## Application preview
+
+![AegisQuant local simulation workspace](docs/images/strategy-workspace-simulation.png)
+
+Local simulation workspace captured on October 4, 2026, showing the price chart, risk controls, and strategy settings. The displayed 300 USDT is a simulated starting balance; this image is not a live account or a current execution status.
+
 ## Runtime workflow
 
 ```text
