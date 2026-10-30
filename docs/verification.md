@@ -53,3 +53,12 @@ The application was rebuilt and its real Overview, Live Trading and News screens
 ### Position status language · 2026-10-31
 
 Generated position sources, cost labels, order/holding states and quote freshness labels are translated at the native presentation layer. The status snapshot, broker records and Python implementation remain unchanged; original status labels are accessible in an explicit disclosure. Original instrument names retain their source language. The application builds successfully, with live action payloads and disabled guards unchanged. Private position screenshots are kept outside the public export.
+
+
+### Desktop connection modes · 2026-10-31
+
+The native Simulation checkbox is an exclusive server-side connection gate. Default REAL-only mode rejects simulation task launches; SIMULATE-only mode rejects REAL refresh, binding and execution requests. Mode updates are serialized with task launches and persisted locally. Switching never clears pauses/loss latches, starts trading or kills workers. Active workers, holdings, unresolved/unknown orders, queued intent, unsettled fill fees, active option gates and HK reservations/claims block leaving the original environment. Unreadable evidence fails closed. Existing live admission and acceptance checks remain unchanged.
+
+The live status projection omits simulation budgets/signals. Display quotes select symbols from the chosen environment. Opening the native app no longer starts the simulation automation supervisor. Public news and quotes remain common read-only services. Independently started CLI tasks remain outside this desktop lifecycle.
+
+Validation: 38 focused desktop/mode/quote tests and 836 protection regression tests passed using isolated fakes and temporary ledgers. No live or simulation SDK account connection, order, account reset or production mode switch was performed for this change. UI screenshots use a POST-rejecting read-only service.

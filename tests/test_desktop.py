@@ -9,7 +9,7 @@ class Desktop(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.data=self.root/'data/desktop'
         self.patches=[patch('trading.desktop_server.ROOT',self.root),patch('trading.desktop_server.DATA',self.data)]
         for p in self.patches:p.start()
-        self.c=Controller()
+        self.c=Controller(initial_mode='simulation')
     def tearDown(self):
         for p in self.patches:p.stop()
         self.tmp.cleanup()

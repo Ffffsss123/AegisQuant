@@ -21,7 +21,7 @@ Publication does not establish live readiness, completed execution acceptance or
 
 ![Live Trading controls in the English macOS application, execution disabled](docs/images/aegisquant-live-controls-en.png)
 
-The actual English macOS **Live Trading** screen uses a traditional desktop layout: native menus and toolbar, a navigation tree, bordered tables and a fixed order-entry pane. Account preparation, explicit enable and execution controls are grouped separately; operating rules are available in Help. Live execution is disabled and its worker is offline in this capture; no real order was submitted. The USD 1,500 sidebar amount belongs to the separate simulation budget, not live funds or account equity.
+The actual English macOS **Live Trading** screen uses a traditional desktop layout: native menus and toolbar, a navigation tree, bordered tables and a fixed order-entry pane. Account preparation, explicit enable and execution controls are grouped separately; operating rules are available in Help. Live execution is disabled and its worker is offline in this capture; no real order was submitted. Simulation budgets are not displayed in REAL-only mode.
 
 
 ### News monitoring
@@ -35,6 +35,14 @@ Source health, search and the news list in the actual application. This capture 
 ![English simulation overview and strategy status](docs/images/aegisquant-securities-console-en.png)
 
 The actual application’s simulation overview, showing historical scans and local simulation state. This illustrates strategy monitoring, not current quotes, live equity or real fills.
+
+## Connection mode switch
+
+The toolbar **Simulation** checkbox controls server-side connection permissions: unchecked means **REAL only**; checked means **SIMULATE only**. The native app opens in REAL-only mode by default, with live execution still disabled. Turning simulation off shows live controls, external live holdings and common news, and rejects simulation tasks. Turning it on rejects REAL account refresh, binding and execution requests. Ledgers, budgets, manual pauses and loss latches remain separate and retained.
+
+Changing modes never starts or resumes trading. The switch is refused while the other mode has a running worker, holdings, pending/unknown orders, queued intent, unsettled fill fees or HK reservations. Reconcile and stop that worker safely before retrying; hiding or deleting records is not a substitute. Use the [live setup guide](docs/live-trading.md) to verify accounts, explicitly enable the portfolio, start its worker and confirm limit orders.
+
+This gate applies to the desktop service; independently launched CLI tasks are not managed by the checkbox. Existing first-live acceptance prerequisites remain in force; turning simulation off does not manufacture acceptance evidence.
 
 ## Runtime workflow
 
@@ -154,7 +162,7 @@ zsh desktop/build.sh
 open AegisQuant.app
 ```
 
-The build produces `AegisQuant.app`. A normal launch connects the local backend and manages tasks according to local configuration. Configure simulation accounts and permissions first. Launching with `AEGIS_READ_ONLY=1` prevents this app from starting its backend or sending action requests; an existing status service is required to display data. Closing the window does not stop background processes.
+The build produces `AegisQuant.app`. A normal launch starts the local service and common quote/news services in the selected connection mode. Simulation execution and the live worker require explicit starts; existing pauses are not cleared. Launching with `AEGIS_READ_ONLY=1` prevents this app from starting its backend or sending action requests; an existing status service is required to display data. Closing the window does not stop background processes.
 
 This sanitized source snapshot excludes runtime databases, balances, trade history, credentials, dependencies and built apps.
 

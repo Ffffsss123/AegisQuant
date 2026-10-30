@@ -36,7 +36,7 @@ def display_quote(cache, code, now=None):
     return dict(current_price=price, price_status=status, price_time=row['time'])
 
 
-def supervise(stop, root):
+def supervise(stop, root, mode=lambda: 'simulation'):
     """One quote-only connection, snapshots every 30s; no trade context exists."""
     from .desktop_server import ledger, read_json
     from .rolling_scan import atomic
@@ -46,14 +46,18 @@ def supervise(stop, root):
     try:
         while not stop.is_set():
             try:
-                codes = set()
-                for name in ('paper.sqlite', 'probe.sqlite', 'option_transport.sqlite'):
+                codes = set();simulation=mode()=='simulation'
+                for name in (('paper.sqlite', 'probe.sqlite', 'option_transport.sqlite') if simulation else ()):
                     state = ledger(root/'data/trading'/name)
                     codes.update(c for c,p in state.get('positions', {}).items() if p.get('qty'))
                 external = read_json(root/'data/desktop/account.json')
-                codes.update(p['code'] for a in external.get('accounts', []) for p in a.get('positions', []) if p.get('qty'))
+                if not simulation:
+                    codes.update(p['code'] for a in external.get('accounts', []) for p in a.get('positions', []) if p.get('qty'))
+                    for market in ('us','hk'):
+                        state=ledger(root/('data/trading/live/'+market+'.sqlite'))
+                        codes.update(c for c,p in state.get('positions',{}).items() if p.get('qty'))
                 option = read_json(root/'data/trading/options.report.json').get('position')
-                if option:
+                if option and simulation:
                     codes.add(option['code'])
                 if codes:
                     if context is None:

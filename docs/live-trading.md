@@ -1,5 +1,11 @@
 # Live stock trading
 
+## Select REAL-only connections first
+
+Uncheck **Simulation** in the toolbar and confirm **REAL only** in the status bar. This disables simulation connections through the desktop service; it does not bind, enable or submit a live order. If switching is blocked by an existing worker, holdings or unresolved records, reconcile and stop the original worker safely before retrying. Preserve unknown orders and reservations. Checking Simulation selects SIMULATE only and rejects REAL connection requests. Existing pauses, stops and loss latches are retained.
+
+
+
 [简体中文](live-trading.zh-CN.md) · [Project README](../README.md)
 
 The English console now includes **Live Trading** for US and Hong Kong **cash common stocks**. Code support is not proof of a successful real-money fill. This release was tested with isolated fake brokers; it has not submitted a REAL order. Live accounts remain unbound and disabled in the developer's environment.

@@ -41,7 +41,33 @@ def jobs_lock():
         finally:fcntl.flock(lock,fcntl.LOCK_UN)
 
 class Controller:
-    def __init__(self):self.lock=threading.Lock();self.jobs={};self.last_message='';DATA.mkdir(parents=True,exist_ok=True)
+    def __init__(self,initial_mode='live'):
+        if initial_mode not in ('live','simulation'):raise ValueError('Invalid workspace mode')
+        self.initial_mode=initial_mode;self.lock=threading.Lock();self.jobs={};self.last_message='';DATA.mkdir(parents=True,exist_ok=True)
+    def mode(self):
+        from .workspace_mode import read_mode
+        return read_mode(ROOT,self.initial_mode)
+    def mode_blockers(self,target):
+        from .workspace_mode import blockers
+        return blockers(ROOT,target,self.running,ledger)
+    def require_mode(self,target):
+        if self.mode()!=target:raise ValueError('Select '+target+' connection mode first')
+        if target=='live':
+            problems=self.mode_blockers('live')
+            if problems:raise ValueError('Live connection blocked: '+'; '.join(problems))
+    def switch_mode(self,target):
+        from .live_trading import private_write
+        if target not in ('live','simulation'):raise ValueError('Invalid workspace mode')
+        with self.lock,jobs_lock():
+            problems=self.mode_blockers(target)
+            if problems:raise ValueError('Mode unchanged: '+'; '.join(problems))
+            private_write(DATA/'workspace_mode.json',dict(mode=target,updated_at=datetime.now(timezone.utc).isoformat()))
+        self.last_message=('REAL-only connections selected; verify, enable and start live execution separately' if target=='live'
+                           else 'SIMULATE-only connections selected; existing pause and loss latches remain unchanged')
+        return dict(mode=target,connection_blockers=[])
+    def workspace_status(self):
+        mode=self.mode()
+        return dict(mode=mode,connection_blockers=self.mode_blockers('live') if mode=='live' else [])
     def running(self,key):
         p=self.jobs.get(key)
         if p and p.poll() is None:return True
@@ -57,6 +83,9 @@ class Controller:
     def start(self,key):
         if key not in COMMANDS:raise ValueError('Unsupported action')
         with self.lock,jobs_lock():
+            from .workspace_mode import SIMULATION_JOBS
+            if key in SIMULATION_JOBS:self.require_mode('simulation')
+            if key in ('live_runner','account'):self.require_mode('live')
             if self.running(key):return '任务已经运行，没有重复启动'
             if key=='live_operation':raise ValueError('Use the scoped live operation endpoint')
             if key=='live_runner':
@@ -67,7 +96,7 @@ class Controller:
                 if s.get('env')!='SIMULATE':raise ValueError('尚未绑定模拟验收账户')
                 if s.get('probe_phase')=='complete':return '模拟接口验收已完成'
             # All state controlled from this app is restricted to SIMULATE.
-            for name in (() if key in ('news','live_runner') else ('paper.sqlite','probe.sqlite')):
+            for name in (('paper.sqlite','probe.sqlite') if key in SIMULATION_JOBS else ()):
                 s=ledger(ROOT/'data/trading'/name)
                 if s and s.get('env')!='SIMULATE':raise ValueError('检测到真实账户账本；图形界面不会启动该账户')
             log=(DATA/(key+'.log')).open('a')
@@ -91,6 +120,7 @@ class Controller:
         if set(payload)-allowed:raise ValueError('Unexpected live request fields')
         import uuid
         with self.lock,jobs_lock():
+            self.require_mode('live')
             if self.running('live_operation'):raise ValueError('Live operation already running; inspect status before retry')
             file=ROOT/'data/trading/live/requests'/(uuid.uuid4().hex+'.json')
             private_write(file,payload)
@@ -112,6 +142,8 @@ class Controller:
     def supervise_automation(self,stop):
         while not stop.is_set():
             try:
+                if self.mode()!='simulation':
+                    stop.wait(30);continue
                 self.start('automation')
                 hk=read_json(ROOT/'data/trading/hk_execution.enabled.json')
                 stock=ledger(ROOT/'data/trading/paper.sqlite')
@@ -125,6 +157,7 @@ class Controller:
             except Exception as exc:self.last_message='自动调度重试中：'+str(exc)
             stop.wait(30)
     def pause_local(self,stop=False):
+        self.require_mode('simulation')
         for name in ('paper.sqlite','probe.sqlite','option_transport.sqlite'):
             state=ledger(ROOT/'data/trading'/name)
             if state and state.get('env')!='SIMULATE':raise ValueError('拒绝更改真实账户账本')
@@ -150,7 +183,30 @@ class Controller:
                     db.save(s,'desktop_pause')
             finally:db.close()
         return self.start('stop' if stop else 'pause')
+    def live_status(self):
+        """Live view reads external REAL records and public news, never simulation ledgers."""
+        from .live_trading import public_status
+        from .position_quotes import display_quote
+        from .news import coverage_age_limit
+        live=public_status(ROOT);external=read_json(DATA/'account.json');cache=read_json(DATA/'position_quotes.json')
+        positions=[]
+        for account in external.get('accounts',[]):
+            for row in account.get('positions',[]):
+                positions.append(dict(code=row['code'],name=row.get('stock_name',''),qty=row['qty'],
+                    currency=row.get('currency',''),market_val=row.get('market_val'),pl_val=row.get('pl_val'),
+                    source='已有实盘 · 仅查看',**external_details(row,external.get('updated_at')),
+                    **display_quote(cache,row['code'])))
+        news=read_json(ROOT/'data/trading/news/latest.json')
+        # Connection blockers inspect local records only; no SIMULATE account is queried.
+        return dict(workspace=self.workspace_status(),live=live,live_enabled=live['enabled'],
+            updated_at=datetime.now(timezone.utc).isoformat(),running={k:self.running(k) for k in COMMANDS},
+            positions=positions,account_updated=external.get('updated_at'),account_error=external.get('error'),
+            sources=[dict(name=k,**v) for k,v in news.get('health',{}).items() if not k.startswith('US.')],
+            events=sorted(news.get('events',[]),key=lambda x:x.get('observed_at',''),reverse=True)[:150],
+            news_updated=news.get('collected_at'),news_max_age_seconds=coverage_age_limit(news),
+            news_schedule=read_json(ROOT/'data/trading/news_schedule.json'),message=self.last_message)
     def status(self):
+        if self.mode()=='live':return self.live_status()
         from .alert_history import AlertHistory
         if not hasattr(self,'alert_history'):self.alert_history=AlertHistory()
         scan=read_json(ROOT/'data/trading/market/scan.json');progress=read_json(ROOT/'data/trading/market/scan_progress.json')
@@ -203,7 +259,7 @@ class Controller:
         # No account IDs or credentials exposed to the client.
         from .live_trading import public_status
         live=public_status(ROOT)
-        return dict(live=live,market_capabilities=market_capabilities(),updated_at=datetime.now(timezone.utc).isoformat(),live_enabled=live['enabled'],display_currency='USD',funding=funding,simulation_total_budget_usd=simulation_total,independent_budget_display=independent,budget_usd=paper.get('initial',600),loss_limit_usd=paper.get('loss_limit',30),single_risk_usd=min(paper.get('initial',600)*.025,paper.get('loss_limit',30)),
+        return dict(workspace=self.workspace_status(),live=live,market_capabilities=market_capabilities(),updated_at=datetime.now(timezone.utc).isoformat(),live_enabled=live['enabled'],display_currency='USD',funding=funding,simulation_total_budget_usd=simulation_total,independent_budget_display=independent,budget_usd=paper.get('initial',600),loss_limit_usd=paper.get('loss_limit',30),single_risk_usd=min(paper.get('initial',600)*.025,paper.get('loss_limit',30)),
             running={k:self.running(k) for k in COMMANDS},message=self.last_message,scan=dict({k:scan.get(k) for k in ('date','complete','history_count','eligible_count','errors','processed_count','excluded_count','pending_count','status_counts','source')},candidate_count=len(shown_candidates)),
             scan_schedule=read_json(ROOT/'data/trading/scan_schedule.json'),automation=read_json(ROOT/'data/trading/automation.json'),strategy=read_json(ROOT/'data/trading/strategy.report.json'),option_transport=read_json(ROOT/'data/trading/option_transport.report.json'),options=read_json(ROOT/'data/trading/options.report.json'),paper_paused=paper.get('paused',False),
             inventory=prep.get('snapshot_count',0),candidates=shown_candidates[:50],swing_research=read_json(ROOT/'data/trading/swing_research.json'),probe=probe,probe_paused=probe_state.get('paused',False),
@@ -228,11 +284,15 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:self.reply(500,{'error':str(exc)})
     def do_POST(self):
         if not self.authorized():self.reply(403,{'error':'Forbidden'});return
-        if self.path not in ('/action','/live'):self.reply(404,{'error':'Not found'});return
+        if self.path not in ('/action','/live','/workspace'):self.reply(404,{'error':'Not found'});return
         try:
             n=int(self.headers.get('Content-Length','0'))
             if not 0<n<=4096:raise ValueError('Invalid request length')
             payload=json.loads(self.rfile.read(n))
+            if self.path=='/workspace':
+                if set(payload)!={'mode'}:raise ValueError('Only a connection mode is accepted')
+                workspace=self.server.controller.switch_mode(payload['mode'])
+                self.reply(200,{'workspace':workspace,'message':self.server.controller.last_message});return
             if self.path=='/live':
                 self.reply(200,{'message':self.server.controller.live_action(payload)});return
             key=payload['action']
@@ -251,9 +311,9 @@ def main():
     with os.fdopen(fd,'w') as f:json.dump(dict(port=server.server_port,token=server.token),f)
     stop=threading.Event()
     from .position_quotes import supervise
-    threading.Thread(target=supervise,args=(stop,ROOT),daemon=True).start()
+    threading.Thread(target=supervise,args=(stop,ROOT),kwargs={'mode':server.controller.mode},daemon=True).start()
     threading.Thread(target=server.controller.supervise_news,args=(stop,),daemon=True).start()
-    threading.Thread(target=server.controller.supervise_automation,args=(stop,),daemon=True).start()
+    # Simulation execution is explicit. Opening the native app never launches it.
     try:server.serve_forever()
     finally:stop.set();server.server_close()
 

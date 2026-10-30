@@ -76,6 +76,7 @@ enum Page: String, CaseIterable {
     @Published var data:[String:Any]=[:]
     @Published var message="Connecting to local service…"
     @Published var error=""
+    @Published var modeError=""
     @Published var busy=false
     @Published var connected=false
     var fetching=false
@@ -136,6 +137,18 @@ enum Page: String, CaseIterable {
             self.message=problem ?? string(obj?["message"]);self.refresh()
         }
     }
+    var simulationEnabled:Bool {string(object(data["workspace"])["mode"])=="simulation"}
+    func setWorkspaceMode(_ simulation:Bool) {
+        guard !readOnly else {message="Read-only session: mode changes disabled";return}
+        busy=true
+        request("workspace",payload:["mode":simulation ? "simulation":"live"]) { [weak self] response,problem in
+            guard let self=self else {return};self.busy=false
+            self.message=problem ?? string(response?["message"])
+            self.modeError=problem ?? ""
+            if let workspace=response?["workspace"] {self.data["workspace"]=workspace}
+            self.refresh()
+        }
+    }
     func running(_ name:String)->Bool {yes(object(data["running"])[name])}
     func openFolder(_ path:String) {NSWorkspace.shared.open(root.appendingPathComponent(path))}
 }
@@ -174,7 +187,8 @@ func optionalMoney(_ value:Any?)->String {value is NSNumber ? money(value):"—"
 
 struct MainView: View {
     @StateObject var m=Model()
-    @State var page:Page = .start
+    @State var page:Page = .live
+    @State var simulationExpanded=true
     @State var securitiesExpanded=true
     @State var executionExpanded=true
     @State var researchExpanded=true
@@ -190,6 +204,7 @@ struct MainView: View {
     @State var liveCode=""
     @State var liveQuantity=""
     @State var liveLimit=""
+    var showSimulation:Bool {m.simulationEnabled}
     var scan:[String:Any] {object(m.data["scan"])}
     var probe:[String:Any] {object(m.data["probe"])}
     var body: some View {
@@ -197,10 +212,11 @@ struct MainView: View {
             HStack(spacing:8){
                 Button {m.refresh()} label:{Label("Refresh",systemImage:"arrow.clockwise")}.help("Refresh local records; no order is submitted")
                 Divider().frame(height:20)
-                ForEach([Page.start,.positions,.returns,.news,.live,.pause],id:\.self){p in
+                ForEach(visiblePages,id:\.self){p in
                     Button {page=p} label:{Label(p.rawValue,systemImage:p.icon)}
                 }
                 Spacer()
+                Toggle("Simulation",isOn:Binding(get:{m.simulationEnabled},set:{m.setWorkspaceMode($0)})).toggleStyle(.checkbox).disabled(m.readOnly || m.busy || !m.connected).help("On: SIMULATE-only connections. Off: REAL-only connections. Switching does not enable trading or clear pauses.")
                 Button("Help"){showHelp.toggle()}.popover(isPresented:$showHelp,arrowEdge:.bottom){
                     VStack(alignment:.leading,spacing:12){
                         Text("AegisQuant Help").font(.headline)
@@ -219,6 +235,9 @@ struct MainView: View {
                 VStack(spacing:0){
                     HStack {Text(page.rawValue).font(.system(size:12,weight:.semibold));Spacer();Text("Records: "+localTime(m.data["updated_at"])).font(.system(size:11)).foregroundStyle(muted)}.padding(.horizontal,10).frame(height:29).background(Color(nsColor:.controlBackgroundColor))
                     Divider()
+                    let blockers=object(m.data["workspace"])["connection_blockers"] as? [String] ?? []
+                    if !blockers.isEmpty {Text("REAL connection blocked: "+blockers.joined(separator:"; ")).font(.system(size:11)).foregroundStyle(warning).padding(8);Divider()}
+                    if !m.modeError.isEmpty {Text(m.modeError).font(.system(size:11)).foregroundStyle(warning).textSelection(.enabled).padding(8);Divider()}
                     if !m.error.isEmpty {HStack {Label(m.error,systemImage:"exclamationmark.triangle").foregroundStyle(warning);Spacer();Button("Reconnect"){m.startBackend();m.refresh()}}.font(.system(size:11)).padding(8).background(Color.yellow.opacity(0.12));Divider()}
                     ScrollView {VStack(alignment:.leading,spacing:10){
                         switch page {case .start:startPage;case .pause:pausePage;case .positions:positionsPage;case .returns:returnsPage;case .news:newsPage;case .live:livePage}
@@ -226,12 +245,26 @@ struct MainView: View {
                 }
             }
             Divider()
-            HStack(spacing:10){Badge(text:m.connected ? "Local service connected":"Local service offline",color:m.connected ? Color(red:0.1,green:0.4,blue:0.15):warning);Divider().frame(height:13);Text(m.readOnly ? "Read-only session":"Live: "+liveStatus(m.data["live"]));Divider().frame(height:13);Text(m.message).lineLimit(1);Spacer();Button("Project folder"){m.openFolder("")}.buttonStyle(.plain)}.font(.system(size:10)).padding(.horizontal,8).frame(height:24).background(navy)
+            HStack(spacing:10){Badge(text:m.connected ? "Local service connected":"Local service offline",color:m.connected ? Color(red:0.1,green:0.4,blue:0.15):warning);Divider().frame(height:13);Text((m.simulationEnabled ? "SIMULATE only":"REAL only")+(m.readOnly ? " · read only":""));Divider().frame(height:13);Text(m.message).lineLimit(1);Spacer();Button("Project folder"){m.openFolder("")}.buttonStyle(.plain)}.font(.system(size:10)).padding(.horizontal,8).frame(height:24).background(navy)
         }.background(navy).foregroundStyle(ink).font(.system(size:12)).controlSize(.small).frame(minWidth:1120,minHeight:740).preferredColorScheme(.light)
         .onReceive(NotificationCenter.default.publisher(for:Notification.Name("AegisNavigate"))){notification in
-            if let name=notification.object as? String,let destination=Page(rawValue:name) {page=destination}
+            if let name=notification.object as? String,let destination=Page(rawValue:name) {
+                if simulationPage(destination) && !showSimulation {m.message="Select Simulation connection mode first"}
+                else if destination == .live && showSimulation {m.message="Turn Simulation off for REAL-only connections"}
+                else {page=destination}
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for:Notification.Name("AegisRefresh"))){_ in m.refresh()}
+        .onAppear {if !showSimulation && simulationPage(page) {page = .live}}
+        .onChange(of:showSimulation){visible in page = visible ? .start:.live}
+    }
+    func simulationPage(_ value:Page)->Bool {[Page.start,.returns,.pause].contains(value)}
+    var visiblePages:[Page] {showSimulation ? [.start,.positions,.returns,.news,.pause]:[.live,.positions,.news]}
+    var displayedPositions:[[String:Any]] {
+        list(m.data["positions"]).filter {position in
+            let external=["已有实盘 · 仅查看","External live · read only"].contains(string(position["source"]))
+            return showSimulation ? !external:external
+        }
     }
     var navigator:some View {
         VStack(alignment:.leading,spacing:0){
@@ -240,19 +273,24 @@ struct MainView: View {
             ScrollView {VStack(alignment:.leading,spacing:9){
                 Label("Local workspace",systemImage:"desktopcomputer").font(.system(size:11,weight:.semibold))
                 DisclosureGroup("Securities",isExpanded:$securitiesExpanded) {
-                    navItem(.start);navItem(.positions);navItem(.returns)
+                    if !showSimulation {navItem(.live)};navItem(.positions)
                 }
-                DisclosureGroup("Execution",isExpanded:$executionExpanded) {navItem(.live);navItem(.pause)}
+                if showSimulation {
+                    DisclosureGroup("Simulation",isExpanded:$simulationExpanded) {navItem(.start);navItem(.returns);navItem(.pause)}
+                    Text("SIMULATE connections only. Existing pause and loss controls remain active.").font(.system(size:10)).foregroundStyle(muted)
+                }
                 DisclosureGroup("Research",isExpanded:$researchExpanded) {navItem(.news)}
                 Divider()
-                Text("REAL accounts").font(.system(size:11,weight:.semibold))
-                Text(yes(object(m.data["live"])["configured"]) ? "Local configuration saved":"Not configured").font(.system(size:11)).foregroundStyle(muted)
-                ForEach(records(list(object(m.data["live"])["markets"]))) {r in
-                    Label(string(r.values["market"])+" · "+string(r.values["currency"]),systemImage:"person.text.rectangle").font(.system(size:11))
+                if !showSimulation {
+                    Text("REAL accounts").font(.system(size:11,weight:.semibold))
+                    Text(yes(object(m.data["live"])["configured"]) ? "Local configuration saved":"Not configured").font(.system(size:11)).foregroundStyle(muted)
+                    ForEach(records(list(object(m.data["live"])["markets"]))) {r in
+                        Label(string(r.values["market"])+" · "+string(r.values["currency"]),systemImage:"person.text.rectangle").font(.system(size:11))
+                    }
                 }
             }.padding(8)}
-            Divider()
-            VStack(alignment:.leading,spacing:6){Text("Simulation budget").foregroundStyle(muted);Text(money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"])+" USD").monospacedDigit();Text("Reserve: "+money(object(m.data["funding"])["reserve_usd"])+" USD").foregroundStyle(muted)}.font(.system(size:11)).padding(8)
+            if showSimulation {Divider()
+            VStack(alignment:.leading,spacing:6){Text("Simulation budget").foregroundStyle(muted);Text(money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"])+" USD").monospacedDigit();Text("Reserve: "+money(object(m.data["funding"])["reserve_usd"])+" USD").foregroundStyle(muted)}.font(.system(size:11)).padding(8)}
         }.frame(maxHeight:.infinity).background(navy)
     }
     func navItem(_ p:Page)->some View {
@@ -432,11 +470,11 @@ struct MainView: View {
     var positionsPage:some View {
         VStack(alignment:.leading,spacing:10){
             ClassicSection(title:"Position records — read only"){
-                HStack{actionButton("Refresh account positions","account");Spacer();Text("Snapshot: "+localTime(m.data["account_updated"])).foregroundStyle(muted)}
-                Text("Simulation, research and external holdings retain their source labels. Manual positions are not strategy-owned; this page cannot submit orders.").font(.system(size:11)).foregroundStyle(muted)
+                HStack{if showSimulation {Button("Refresh local records"){m.refresh()}} else {actionButton("Refresh account positions","account")};Spacer();Text("Snapshot: "+localTime(m.data["account_updated"])).foregroundStyle(muted)}
+                Text(showSimulation ? "Simulation, research and external holdings retain their source labels. This page cannot submit orders.":"External live holdings are read only. This page cannot submit orders.").font(.system(size:11)).foregroundStyle(muted)
                 if let error=m.data["account_error"] as? String {Text(error).foregroundStyle(warning)}
             }
-            Table(records(list(m.data["positions"]))) {
+            Table(records(displayedPositions)) {
                 TableColumn("Symbol"){r in Text(string(r.values["code"]))}.width(min:85,ideal:105)
                 TableColumn("Source"){r in Text(positionLabel(r.values["source"]))}.width(min:115,ideal:160)
                 TableColumn("Qty"){r in Text(optionalMoney(r.values["qty"])).monospacedDigit()}.width(70)
@@ -445,13 +483,13 @@ struct MainView: View {
                 TableColumn("Last"){r in Text(optionalMoney(r.values["current_price"])).monospacedDigit()}.width(80)
                 TableColumn("Quote status"){r in Text(positionLabel(r.values["price_status"]))}
             }.tableStyle(.bordered(alternatesRowBackgrounds:true)).frame(height:280).border(rule)
-            if list(m.data["positions"]).isEmpty {Text("No positions loaded. Missing data does not establish an empty account.").foregroundStyle(muted)}
+            if displayedPositions.isEmpty {Text("No positions loaded. Missing data does not establish an empty account.").foregroundStyle(muted)}
             DisclosureGroup("Position details, valuation and original source records"){positionDetailsPage.padding(.top,8)}
         }
     }
     var positionDetailsPage:some View {
-        VStack(spacing:20){Box{HStack{VStack(alignment:.leading,spacing:6){Text("Existing live positions · read-only").font(.headline);Text("Manual positions are not attributed to the strategy. This page does not submit orders.").font(.caption).foregroundStyle(muted)};Spacer();actionButton("Refresh account positions","account")};Text("Account snapshot: "+localTime(m.data["account_updated"])).font(.caption).foregroundStyle(muted);if let err=m.data["account_error"] as? String {Text(err).foregroundStyle(warning).font(.caption)}}
-            Box{if list(m.data["positions"]).isEmpty {Empty(icon:"tray",title:"No loaded positions",detail:"Refresh above to fetch an account snapshot. Missing data does not establish an empty account.") } else {ForEach(Array(list(m.data["positions"]).enumerated()),id:\.offset){_,p in VStack(alignment:.leading,spacing:10){HStack{Text(string(p["code"])).font(.headline);Badge(text:positionLabel(p["source"]),color:warning);Spacer();Text("\(Int(number(p["qty"]))) units").font(.title3).monospacedDigit()};Text(positionLabel(p["name"])).font(.callout).foregroundStyle(muted)
+        VStack(spacing:20){Box{HStack{VStack(alignment:.leading,spacing:6){Text(showSimulation ? "Simulation positions":"Existing live positions · read-only").font(.headline);Text("Manual positions are not attributed to the strategy. This page does not submit orders.").font(.caption).foregroundStyle(muted)};Spacer();if showSimulation {Button("Refresh local records"){m.refresh()}} else {actionButton("Refresh account positions","account")}};Text("Account snapshot: "+localTime(m.data["account_updated"])).font(.caption).foregroundStyle(muted);if let err=m.data["account_error"] as? String {Text(err).foregroundStyle(warning).font(.caption)}}
+            Box{if displayedPositions.isEmpty {Empty(icon:"tray",title:"No loaded positions",detail:"Refresh above to fetch an account snapshot. Missing data does not establish an empty account.") } else {ForEach(Array(displayedPositions.enumerated()),id:\.offset){_,p in VStack(alignment:.leading,spacing:10){HStack{Text(string(p["code"])).font(.headline);Badge(text:positionLabel(p["source"]),color:warning);Spacer();Text("\(Int(number(p["qty"]))) units").font(.title3).monospacedDigit()};Text(positionLabel(p["name"])).font(.callout).foregroundStyle(muted)
                 HStack {Text(positionLabel(p["buy_price_label"]));Spacer();Text(p["buy_price"] is NSNumber ? money(p["buy_price"])+" "+string(p["currency"]) : "No valid records").monospacedDigit()}.font(.callout)
                 HStack {Text("Last price");Spacer();Text(p["current_price"] is NSNumber ? money(p["current_price"])+" "+string(p["currency"]) : "Awaiting valid quotes").monospacedDigit().foregroundStyle(mint)}.font(.callout)
                 Text(positionLabel(p["price_status"])+(p["price_time"] is String ? " · "+localTime(p["price_time"]) : "")).font(.caption2).foregroundStyle(muted)
@@ -529,17 +567,17 @@ struct MainView: View {
         VStack(spacing:20){Box{HStack{Text("External news monitoring").font(.headline);Spacer();Badge(text:m.running("news") ? "Monitoring automatically":"Connecting automatically",color:m.running("news") ? mint:warning)};Text("Collection and rule analysis run every 2 minutes after startup; source limits defer retries. Pausing trading does not pause news.").font(.caption).foregroundStyle(muted);Text("Next collection "+localTime(object(m.data["news_schedule"])["next_run_at"])).font(.caption).foregroundStyle(muted);Text("Snapshot "+localTime(m.data["news_updated"])+" · Publication time, source verification and market impact assessed separately").font(.caption).foregroundStyle(muted)
             LazyVGrid(columns:[GridItem(.adaptive(minimum:180))],alignment:.leading,spacing:10){ForEach(Array(list(m.data["sources"]).enumerated()),id:\.offset){_,s in let date=dateValue(string(s["checked_at"]));let fresh=date.map {Date().timeIntervalSince($0)>=0 && Date().timeIntervalSince($0)<=number(m.data["news_max_age_seconds"] ?? 300)} ?? false;HStack{Circle().fill(yes(s["ok"]) && fresh ? mint:warning).frame(width:6,height:6);Text(sourceName(string(s["name"]))).font(.caption);Spacer();Text(string(s["status"])=="disabled_by_configuration" ? "Disabled":(!fresh ? "Expired":(yes(s["ok"]) ? "Healthy":"Review pending"))).font(.caption2).foregroundStyle(muted)}.padding(10).background(navy).border(rule)}}
             HStack{TextField("Search headline or source",text:$query).textFieldStyle(.squareBorder);Picker("Source",selection:$newsSource){Text("All").tag("All");ForEach(list(m.data["sources"]).compactMap{$0["name"] as? String},id:\.self){name in Text(sourceName(name)).tag(name)}}.frame(width:220)}}
-            Box {
+            if showSimulation {Box {
                 Text("News opportunities · separate simulation budgets").font(.headline)
                 Text("Verified positive news can link eligible US/HK symbols outside the watchlist. History, strategy, quotes and account risk checks still apply. First simulation buy requires valid news evidence; USD 390 reserve remains untouched. News integration does not establish execution acceptance.").font(.caption).foregroundStyle(muted)
-            }
+            }}
             if filteredEvents.isEmpty {Box{Empty(icon:"newspaper",title:"No matching news",detail:"News updates in the background. Review source health or change filters.")}} else {ForEach(Array(filteredEvents.enumerated()),id:\.offset){_,e in Box{HStack{Text(string(e["source"])).font(.caption.weight(.medium)).foregroundStyle(mint);Spacer();Badge(text:actionName(string(e["action"])),color:string(e["action"])=="block" ? warning:muted)};Text(string(e["title"])).font(.system(size:16,weight:.medium)).textSelection(.enabled);HStack{Text("Published "+localTime(e["published_at"]));Spacer();Text("Collected "+localTime(e["observed_at"]))}.font(.caption2).foregroundStyle(muted);let analysis=object(e["analysis"]);ForEach(analysis["hypotheses"] as? [String] ?? [],id:\.self){x in Text(x).font(.callout).foregroundStyle(muted)};Text(string(e["reason"])).font(.caption).foregroundStyle(muted);if let raw=e["url"] as? String,let u=URL(string:raw),u.scheme=="https" {Link("Open source ↗",destination:u).font(.caption).foregroundStyle(mint)}}}
         }
     }
     }
     func liveButton(_ title:String,_ action:String)->some View {
         Button(title){m.liveAction(["action":action])}.buttonStyle(.bordered)
-            .disabled(m.readOnly || !m.connected || m.busy)
+            .disabled(m.readOnly || m.simulationEnabled || !m.connected || m.busy)
     }
     var liveMarketRows:[DesktopRecord] {records(list(object(m.data["live"])["markets"]))}
     var liveOrderRows:[DesktopRecord] {
@@ -597,14 +635,14 @@ struct MainView: View {
                     TextField("Type PLACE LIVE ORDER",text:$orderConfirmation)
                     Button("Submit REAL limit order") {
                         m.liveAction(["action":"order","market":liveMarket,"side":liveSide,"code":liveCode.trimmingCharacters(in:.whitespacesAndNewlines),"qty":liveQuantity,"limit":liveLimit,"confirmation":orderConfirmation,"request_id":UUID().uuidString.replacingOccurrences(of:"-",with:"").lowercased()]);orderConfirmation=""
-                    }.buttonStyle(.bordered).disabled(m.readOnly || !m.connected || m.busy || orderConfirmation != "PLACE LIVE ORDER")
+                    }.buttonStyle(.bordered).disabled(m.readOnly || m.simulationEnabled || !m.connected || m.busy || orderConfirmation != "PLACE LIVE ORDER")
                     Text("Fixed limit · cancellation due in 60 s").font(.system(size:10)).foregroundStyle(muted)
                     Text("Requires an enabled portfolio, running worker and all admission checks. Manual holdings cannot be sold here.").font(.system(size:10)).foregroundStyle(muted)
                 }
                 ClassicSection(title:"Execution control"){
                     TextField("Type ENABLE LIVE STOCKS",text:$liveConfirmation)
                     Button("Enable live stocks") {m.liveAction(["action":"enable","confirmation":liveConfirmation]);liveConfirmation=""}
-                        .disabled(m.readOnly || !m.connected || m.busy || liveConfirmation != "ENABLE LIVE STOCKS")
+                        .disabled(m.readOnly || m.simulationEnabled || !m.connected || m.busy || liveConfirmation != "ENABLE LIVE STOCKS")
                     HStack {liveButton("Start worker","start");liveButton("Reconcile once","maintain")}
                     HStack {
                         Button("Pause live buys"){m.liveAction(["action":"pause"])}
