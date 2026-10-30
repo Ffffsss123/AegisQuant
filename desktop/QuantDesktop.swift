@@ -11,6 +11,40 @@ let ink = Color(nsColor:.labelColor)
 let rule = Color(nsColor:.separatorColor)
 let warning = Color(red:0.64,green:0.23,blue:0.08)
 func string(_ x: Any?) -> String { x as? String ?? "—" }
+// Translate generated presentation labels without changing broker or ledger records.
+func positionLabel(_ value:Any?)->String {
+    var result=string(value)
+    let labels:[(String,String)] = [
+        ("已有实盘 · 仅查看","External live · read only"),
+        ("纸面假设 · 非券商持仓","Paper assumption · not broker-held"),
+        ("期权报价研究 · ","Option quote research · "),
+        ("订单结果待确认 · 正在对账","Order outcome unconfirmed · reconciling"),
+        ("已请求撤单 · 等待确认","Cancellation requested · awaiting confirmation"),
+        ("卖出部分成交 · 等待余单","Sell partially filled · awaiting remainder"),
+        ("买入部分成交 · 等待余单","Buy partially filled · awaiting remainder"),
+        ("卖出订单处理中","Sell order pending"),
+        ("买入订单处理中","Buy order pending"),
+        ("持有中 · 模拟交易已停止","Holding · simulation stopped"),
+        ("卖出待提交 · 等待报价及下单检查","Sell queued · awaiting quote and order checks"),
+        ("持有中 · 买卖盘价差过大，暂不满足卖出报价条件","Holding · spread fails exit quote checks"),
+        ("持有中 · 退出报价待核验","Holding · exit quote verification pending"),
+        ("持有中 · 暂停新买入，继续退出管理","Holding · new buys paused; exits managed"),
+        ("持有中 · 策略监测中","Holding · strategy monitoring"),
+        ("持有中 · 已有实盘，仅查看","Holding · external live position, read only"),
+        ("买入均价（不含费用）","Average entry price (excl. fees)"),
+        ("券商持仓成本价","Broker-reported cost price"),
+        ("暂无有效报价","No valid quote"),
+        ("最近成交价 · 已超过 30 秒","Last trade · older than 30 s"),
+        ("最新成交价","Latest trade"),
+        (" · 更新暂不可用"," · refresh unavailable"),
+        ("纸面买入价","Assumed paper entry price"),
+        ("纸面持仓 · 非券商成交","Paper holding · not a broker fill"),
+        ("策略模拟","Strategy simulation"),
+        ("接口测试","Transport test")
+    ]
+    for (original,english) in labels {result=result.replacingOccurrences(of:original,with:english)}
+    return result
+}
 func number(_ x: Any?) -> Double { (x as? NSNumber)?.doubleValue ?? 0 }
 func list(_ x: Any?) -> [[String:Any]] { x as? [[String:Any]] ?? [] }
 func object(_ x: Any?) -> [String:Any] { x as? [String:Any] ?? [:] }
@@ -404,12 +438,12 @@ struct MainView: View {
             }
             Table(records(list(m.data["positions"]))) {
                 TableColumn("Symbol"){r in Text(string(r.values["code"]))}.width(min:85,ideal:105)
-                TableColumn("Source"){r in Text(string(r.values["source"]))}.width(min:115,ideal:160)
+                TableColumn("Source"){r in Text(positionLabel(r.values["source"]))}.width(min:115,ideal:160)
                 TableColumn("Qty"){r in Text(optionalMoney(r.values["qty"])).monospacedDigit()}.width(70)
                 TableColumn("CCY"){r in Text(string(r.values["currency"]))}.width(45)
                 TableColumn("Cost"){r in Text(optionalMoney(r.values["buy_price"])).monospacedDigit()}.width(80)
                 TableColumn("Last"){r in Text(optionalMoney(r.values["current_price"])).monospacedDigit()}.width(80)
-                TableColumn("Quote status"){r in Text(string(r.values["price_status"]))}
+                TableColumn("Quote status"){r in Text(positionLabel(r.values["price_status"]))}
             }.tableStyle(.bordered(alternatesRowBackgrounds:true)).frame(height:280).border(rule)
             if list(m.data["positions"]).isEmpty {Text("No positions loaded. Missing data does not establish an empty account.").foregroundStyle(muted)}
             DisclosureGroup("Position details, valuation and original source records"){positionDetailsPage.padding(.top,8)}
@@ -417,13 +451,13 @@ struct MainView: View {
     }
     var positionDetailsPage:some View {
         VStack(spacing:20){Box{HStack{VStack(alignment:.leading,spacing:6){Text("Existing live positions · read-only").font(.headline);Text("Manual positions are not attributed to the strategy. This page does not submit orders.").font(.caption).foregroundStyle(muted)};Spacer();actionButton("Refresh account positions","account")};Text("Account snapshot: "+localTime(m.data["account_updated"])).font(.caption).foregroundStyle(muted);if let err=m.data["account_error"] as? String {Text(err).foregroundStyle(warning).font(.caption)}}
-            Box{if list(m.data["positions"]).isEmpty {Empty(icon:"tray",title:"No loaded positions",detail:"Refresh above to fetch an account snapshot. Missing data does not establish an empty account.") } else {ForEach(Array(list(m.data["positions"]).enumerated()),id:\.offset){_,p in VStack(alignment:.leading,spacing:10){HStack{Text(string(p["code"])).font(.headline);Badge(text:string(p["source"]),color:warning);Spacer();Text("\(Int(number(p["qty"]))) units").font(.title3).monospacedDigit()};Text(string(p["name"])).font(.callout).foregroundStyle(muted)
-                HStack {Text(string(p["buy_price_label"]));Spacer();Text(p["buy_price"] is NSNumber ? money(p["buy_price"])+" "+string(p["currency"]) : "No valid records").monospacedDigit()}.font(.callout)
+            Box{if list(m.data["positions"]).isEmpty {Empty(icon:"tray",title:"No loaded positions",detail:"Refresh above to fetch an account snapshot. Missing data does not establish an empty account.") } else {ForEach(Array(list(m.data["positions"]).enumerated()),id:\.offset){_,p in VStack(alignment:.leading,spacing:10){HStack{Text(string(p["code"])).font(.headline);Badge(text:positionLabel(p["source"]),color:warning);Spacer();Text("\(Int(number(p["qty"]))) units").font(.title3).monospacedDigit()};Text(positionLabel(p["name"])).font(.callout).foregroundStyle(muted)
+                HStack {Text(positionLabel(p["buy_price_label"]));Spacer();Text(p["buy_price"] is NSNumber ? money(p["buy_price"])+" "+string(p["currency"]) : "No valid records").monospacedDigit()}.font(.callout)
                 HStack {Text("Last price");Spacer();Text(p["current_price"] is NSNumber ? money(p["current_price"])+" "+string(p["currency"]) : "Awaiting valid quotes").monospacedDigit().foregroundStyle(mint)}.font(.callout)
-                Text(string(p["price_status"])+(p["price_time"] is String ? " · "+localTime(p["price_time"]) : "")).font(.caption2).foregroundStyle(muted)
-                Text("Current status: "+string(p["position_status"])).font(.caption).foregroundStyle(warning)
+                Text(positionLabel(p["price_status"])+(p["price_time"] is String ? " · "+localTime(p["price_time"]) : "")).font(.caption2).foregroundStyle(muted)
+                Text("Current status: "+positionLabel(p["position_status"])).font(.caption).foregroundStyle(warning)
                 if p["position_updated_at"] is String {Text("Account snapshot: "+localTime(p["position_updated_at"])).font(.caption2).foregroundStyle(muted)}
-                if p["swing_stop"] != nil {Text("Holding day \(Int(number(p["holding_sessions"]))) · Exit reference USD "+money(p["swing_stop"])+" / "+money(p["swing_target"])).font(.caption).foregroundStyle(muted)};if p["market_val"] != nil {HStack{Text("Market value "+money(p["market_val"])+" "+string(p["currency"]));Spacer();Text("Position P&L "+money(p["pl_val"])+" "+string(p["currency"])).foregroundStyle(number(p["pl_val"])>=0 ? mint:warning)}.font(.caption)};Divider()}.padding(.vertical,8)}}}
+                if p["swing_stop"] != nil {Text("Holding day \(Int(number(p["holding_sessions"]))) · Exit reference USD "+money(p["swing_stop"])+" / "+money(p["swing_target"])).font(.caption).foregroundStyle(muted)};if p["market_val"] != nil {HStack{Text("Market value "+money(p["market_val"])+" "+string(p["currency"]));Spacer();Text("Position P&L "+money(p["pl_val"])+" "+string(p["currency"])).foregroundStyle(number(p["pl_val"])>=0 ? mint:warning)}.font(.caption)};DisclosureGroup("Original source labels"){Text(["source","buy_price_label","position_status","price_status"].map{string(p[$0])}.joined(separator:"\n")).font(.caption).foregroundStyle(muted).textSelection(.enabled)};Divider()}.padding(.vertical,8)}}}
         }
     }
     var returnsPage:some View {
