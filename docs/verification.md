@@ -35,9 +35,16 @@ The public repository now contains the securities console and its supporting too
 
 ### Homepage screenshot selection
 
-The first screenshot in all three README editions now shows the actual English Live Trading controls; the gallery also shows news monitoring and the simulation overview. The simulation Overview is no longer the homepage screenshot. Both captures retain the disabled/offline state and do not claim a connected REAL account or real fills.
+The first screenshot in all three README editions now shows the actual English Live Trading controls; the gallery also shows news monitoring and the simulation overview. The simulation Overview is no longer the homepage screenshot. All three captures retain the disabled/offline state and do not claim a connected REAL account or real fills.
 
 
 ### Native workspace layout review · 2026-10-31
 
 The native SwiftUI application builds successfully with a compact graphite layout, shared status bar and a two-column Live Trading workspace. Existing action payloads and disabled guards were compared with the previous source and preserved. Screenshots were captured from the built application using a local status service with POST rejected and AEGIS_READ_ONLY=1. No execution worker or broker connection was started. News and simulation records are historical. This presentation-only change does not change the Python protection fingerprint or provide REAL execution acceptance.
+
+
+### Traditional desktop terminal review · 2026-10-31
+
+The graphite presentation has been replaced by a light, native desktop terminal. Account state, strategy-owned positions, live order records, historical candidates and news use bordered tables with alternating rows. The window has a native title bar, Workspace menu, toolbar, collapsible navigation tree and bottom status bar. The fixed order-entry pane keeps the side, symbol, quantity, limit and exact confirmation separate. Extended operating rules and original diagnostics remain accessible through Help or disclosures.
+
+The application was rebuilt and its real Overview, Live Trading and News screens inspected and recaptured. The backend Model implementation, live action payloads and disabled guards were compared with the previous revision and are unchanged. Python protection provenance still matches; this UI-only revision does not claim a fresh business-regression run. No broker connection, account binding, live enable, order or execution worker was started for the capture. REAL account tables are unbound in the screenshot; blank tables are not evidence of an empty broker account. Local financial position records were excluded from published screenshots.

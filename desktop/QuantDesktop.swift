@@ -2,10 +2,14 @@ import SwiftUI
 import Charts
 import AppKit
 
-let navy = Color(red:0.075,green:0.080,blue:0.090)
-let panel = Color(red:0.105,green:0.112,blue:0.125)
-let mint = Color(red:0.46,green:0.65,blue:0.94)
-let muted = Color(red:0.57,green:0.60,blue:0.65)
+// Native desktop palette: system surfaces, ruled tables and standard controls.
+let navy = Color(nsColor:.windowBackgroundColor)
+let panel = Color(nsColor:.textBackgroundColor)
+let mint = Color(red:0.05,green:0.25,blue:0.53)
+let muted = Color(nsColor:.secondaryLabelColor)
+let ink = Color(nsColor:.labelColor)
+let rule = Color(nsColor:.separatorColor)
+let warning = Color(red:0.64,green:0.23,blue:0.08)
 func string(_ x: Any?) -> String { x as? String ?? "—" }
 func number(_ x: Any?) -> Double { (x as? NSNumber)?.doubleValue ?? 0 }
 func list(_ x: Any?) -> [[String:Any]] { x as? [[String:Any]] ?? [] }
@@ -104,25 +108,44 @@ enum Page: String, CaseIterable {
 
 struct Badge: View {
     var text:String;var color:Color=mint
-    var body:some View {HStack(spacing:5){Rectangle().fill(color).frame(width:4,height:4);Text(text).font(.system(size:10,weight:.medium,design:.monospaced))}.foregroundStyle(color)}
+    var body:some View {HStack(spacing:5){Rectangle().fill(color).frame(width:5,height:5);Text(text).font(.system(size:11))}.foregroundStyle(color)}
 }
 struct Box<Content:View>:View {
     @ViewBuilder var content:Content
-    var body:some View {VStack(alignment:.leading,spacing:12){content}.padding(18).frame(maxWidth:.infinity,alignment:.leading).background(panel,in:RoundedRectangle(cornerRadius:4)).overlay(RoundedRectangle(cornerRadius:4).stroke(.white.opacity(0.09)))}
+    var body:some View {VStack(alignment:.leading,spacing:8){content}.padding(10).frame(maxWidth:.infinity,alignment:.leading).background(panel).border(rule)}
+}
+struct ClassicSection<Content:View>:View {
+    let title:String
+    @ViewBuilder var content:Content
+    var body:some View {VStack(alignment:.leading,spacing:0){
+        HStack {Text(title).font(.system(size:11,weight:.semibold));Spacer()}.padding(.horizontal,8).frame(height:25).background(Color(nsColor:.controlBackgroundColor))
+        Divider()
+        VStack(alignment:.leading,spacing:8){content}.padding(8).frame(maxWidth:.infinity,alignment:.leading)
+    }.background(panel).border(rule)}
 }
 struct Metric:View {
     var title:String;var value:String;var note:String
-    var body:some View {VStack(alignment:.leading,spacing:8){Text(title.uppercased()).font(.system(size:10,weight:.medium)).tracking(0.7).foregroundStyle(muted);Text(value).font(.system(size:25,weight:.medium,design:.monospaced)).monospacedDigit();Text(note).font(.system(size:11)).foregroundStyle(muted).lineLimit(2)}.padding(16).frame(maxWidth:.infinity,alignment:.leading).background(panel).overlay(alignment:.leading){Rectangle().fill(.white.opacity(0.12)).frame(width:1)}}
+    var body:some View {HStack{Text(title).foregroundStyle(muted);Spacer();Text(value).monospacedDigit()}.font(.system(size:12)).padding(8).background(panel).border(rule).help(note)}
 }
-
 struct Empty:View {
     var icon:String;var title:String;var detail:String
-    var body:some View {VStack(spacing:14){Image(systemName:icon).font(.system(size:32,weight:.light)).foregroundStyle(mint);Text(title).font(.title3.weight(.medium));Text(detail).font(.callout).foregroundStyle(muted).multilineTextAlignment(.center).frame(maxWidth:460)}.frame(maxWidth:.infinity).padding(.vertical,48)}
+    var body:some View {VStack(alignment:.leading,spacing:5){Text(title).font(.system(size:12));Text(detail).font(.system(size:11)).foregroundStyle(muted)}.frame(maxWidth:.infinity,alignment:.leading).padding(10)}
 }
+struct DesktopRecord:Identifiable {
+    let id:Int
+    let values:[String:Any]
+}
+func records(_ values:[[String:Any]])->[DesktopRecord] {values.enumerated().map {DesktopRecord(id:$0.offset,values:$0.element)}}
+func optionalMoney(_ value:Any?)->String {value is NSNumber ? money(value):"—"}
 
 struct MainView: View {
     @StateObject var m=Model()
     @State var page:Page = .start
+    @State var securitiesExpanded=true
+    @State var executionExpanded=true
+    @State var researchExpanded=true
+    @State var showHelp=false
+    @State var showDiagnostics=false
     @State var query=""
     @State var newsSource="All"
     @State var pauseConfirm=false
@@ -136,35 +159,102 @@ struct MainView: View {
     var scan:[String:Any] {object(m.data["scan"])}
     var probe:[String:Any] {object(m.data["probe"])}
     var body: some View {
-        HStack(spacing:0){
-            VStack(alignment:.leading,spacing:0){
-                HStack(spacing:9){Text("AQ").font(.system(size:13,weight:.bold,design:.monospaced)).foregroundStyle(navy).frame(width:28,height:28).background(mint,in:RoundedRectangle(cornerRadius:3));Text("AegisQuant").font(.system(size:14,weight:.semibold))}.padding(.vertical,24)
-                Text("WORKSPACE").font(.system(size:9,weight:.medium)).tracking(1.2).foregroundStyle(muted).padding(.bottom,12)
-                VStack(spacing:3){ForEach(Page.allCases,id:\.self){p in Button {page=p} label:{HStack(spacing:10){Image(systemName:p.icon).font(.system(size:12)).frame(width:16);Text(p.rawValue).font(.system(size:12,weight:page==p ? .semibold:.regular));Spacer()}.padding(.horizontal,10).frame(height:34).foregroundStyle(page==p ? Color.white:muted).background(page==p ? Color.white.opacity(0.07):.clear,in:RoundedRectangle(cornerRadius:3)).overlay(alignment:.leading){if page==p {Rectangle().fill(mint).frame(width:2).padding(.vertical,8)}}}.buttonStyle(.plain)}}
+        VStack(spacing:0){
+            HStack(spacing:8){
+                Button {m.refresh()} label:{Label("Refresh",systemImage:"arrow.clockwise")}.help("Refresh local records; no order is submitted")
+                Divider().frame(height:20)
+                ForEach([Page.start,.positions,.returns,.news,.live,.pause],id:\.self){p in
+                    Button {page=p} label:{Label(p.rawValue,systemImage:p.icon)}
+                }
                 Spacer()
-                VStack(alignment:.leading,spacing:10){
+                Button("Help"){showHelp.toggle()}.popover(isPresented:$showHelp,arrowEdge:.bottom){
+                    VStack(alignment:.leading,spacing:12){
+                        Text("AegisQuant Help").font(.headline)
+                        Text(page.subtitle)
+                        Text("Live stocks require verified accounts, a matching natural simulation round trip, current protection checks and clean reconciliation. Enabling and starting the worker are separate operations. New buys also require a later trading session, complete scans, valid stock identity, fresh bid/ask, news, cash and risk checks.")
+                        Text("Pause retains exits, cancellations and reconciliation. Stop blocks all new orders, including automatic exits. Neither guarantees an empty account. Unknown responses require reconciliation before any retry. Fixed limits; cancellation due after 60 seconds. Manual holdings cannot be sold here.")
+                        Text("Only US/HK common stocks support live execution. Options and futures remain disabled. No borrowing, deposits or currency conversion. USD 390 reserve remains excluded. Closing the window does not stop existing workers.")
+                        Button("Open live trading guide"){m.openFolder("docs/live-trading.md")}
+                    }.font(.system(size:12)).padding(18).frame(width:480)
+                }
+            }.buttonStyle(.bordered).controlSize(.small).padding(.horizontal,8).frame(height:37).background(navy)
+            Divider()
+            HStack(spacing:0){
+                navigator.frame(width:172)
+                Divider()
+                VStack(spacing:0){
+                    HStack {Text(page.rawValue).font(.system(size:12,weight:.semibold));Spacer();Text("Records: "+localTime(m.data["updated_at"])).font(.system(size:11)).foregroundStyle(muted)}.padding(.horizontal,10).frame(height:29).background(Color(nsColor:.controlBackgroundColor))
                     Divider()
-                    Text("SIMULATION CAPITAL").font(.system(size:9,weight:.medium)).tracking(0.7).foregroundStyle(muted)
-                    Text(money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"])+" USD").font(.system(size:15,weight:.medium,design:.monospaced))
-                    Text("Reserve  "+money(object(m.data["funding"])["reserve_usd"])+" USD").font(.system(size:10,design:.monospaced)).foregroundStyle(muted)
-                    Divider().padding(.vertical,3)
-                    Badge(text:m.readOnly ? "READ ONLY" : "LIVE "+liveStatus(m.data["live"]),color:m.readOnly ? muted:.orange)
-                }.padding(.bottom,18)
-            }.padding(.horizontal,16).frame(width:182).background(Color.black.opacity(0.18)).overlay(alignment:.trailing){Rectangle().fill(.white.opacity(0.07)).frame(width:1)}
-            VStack(spacing:0){
-                HStack(spacing:14){Text(page.rawValue).font(.system(size:18,weight:.semibold));Spacer();Badge(text:m.connected ? "LOCAL CONNECTED":"LOCAL OFFLINE",color:m.connected ? Color.green:muted);Text(localTime(m.data["updated_at"])).font(.system(size:10,design:.monospaced)).foregroundStyle(muted);Button {m.refresh()} label:{Image(systemName:"arrow.clockwise").font(.system(size:12))}.buttonStyle(.plain).help("Refresh local status")}.padding(.horizontal,24).frame(height:62).background(panel.opacity(0.4)).overlay(alignment:.bottom){Rectangle().fill(.white.opacity(0.07)).frame(height:1)}
-                ScrollView {VStack(alignment:.leading,spacing:20){
-                    if !m.error.isEmpty {Box{Label(m.error,systemImage:"exclamationmark.triangle").foregroundStyle(.orange);Button("Reconnect local service"){m.startBackend();m.refresh()}}}
-                    switch page {case .start:startPage;case .pause:pausePage;case .positions:positionsPage;case .returns:returnsPage;case .news:newsPage;case .live:livePage}
-                }.padding(24)}
-                HStack(spacing:8){Text("STATUS").foregroundStyle(muted);Text(m.message).lineLimit(1);Spacer();Button("Project files ↗"){m.openFolder("")}.buttonStyle(.plain).foregroundStyle(muted)}.font(.system(size:10,design:.monospaced)).padding(.horizontal,24).frame(height:30).background(.black.opacity(0.18))
+                    if !m.error.isEmpty {HStack {Label(m.error,systemImage:"exclamationmark.triangle").foregroundStyle(warning);Spacer();Button("Reconnect"){m.startBackend();m.refresh()}}.font(.system(size:11)).padding(8).background(Color.yellow.opacity(0.12));Divider()}
+                    ScrollView {VStack(alignment:.leading,spacing:10){
+                        switch page {case .start:startPage;case .pause:pausePage;case .positions:positionsPage;case .returns:returnsPage;case .news:newsPage;case .live:livePage}
+                    }.padding(10)}.background(panel)
+                }
             }
-        }.background(navy).foregroundStyle(.white.opacity(0.92)).frame(minWidth:1060,minHeight:740).preferredColorScheme(.dark)
+            Divider()
+            HStack(spacing:10){Badge(text:m.connected ? "Local service connected":"Local service offline",color:m.connected ? Color(red:0.1,green:0.4,blue:0.15):warning);Divider().frame(height:13);Text(m.readOnly ? "Read-only session":"Live: "+liveStatus(m.data["live"]));Divider().frame(height:13);Text(m.message).lineLimit(1);Spacer();Button("Project folder"){m.openFolder("")}.buttonStyle(.plain)}.font(.system(size:10)).padding(.horizontal,8).frame(height:24).background(navy)
+        }.background(navy).foregroundStyle(ink).font(.system(size:12)).controlSize(.small).frame(minWidth:1120,minHeight:740).preferredColorScheme(.light)
+        .onReceive(NotificationCenter.default.publisher(for:Notification.Name("AegisNavigate"))){notification in
+            if let name=notification.object as? String,let destination=Page(rawValue:name) {page=destination}
+        }
+        .onReceive(NotificationCenter.default.publisher(for:Notification.Name("AegisRefresh"))){_ in m.refresh()}
+    }
+    var navigator:some View {
+        VStack(alignment:.leading,spacing:0){
+            Text("Navigator").font(.system(size:11,weight:.semibold)).padding(.horizontal,8).frame(height:29)
+            Divider()
+            ScrollView {VStack(alignment:.leading,spacing:9){
+                Label("Local workspace",systemImage:"desktopcomputer").font(.system(size:11,weight:.semibold))
+                DisclosureGroup("Securities",isExpanded:$securitiesExpanded) {
+                    navItem(.start);navItem(.positions);navItem(.returns)
+                }
+                DisclosureGroup("Execution",isExpanded:$executionExpanded) {navItem(.live);navItem(.pause)}
+                DisclosureGroup("Research",isExpanded:$researchExpanded) {navItem(.news)}
+                Divider()
+                Text("REAL accounts").font(.system(size:11,weight:.semibold))
+                Text(yes(object(m.data["live"])["configured"]) ? "Local configuration saved":"Not configured").font(.system(size:11)).foregroundStyle(muted)
+                ForEach(records(list(object(m.data["live"])["markets"]))) {r in
+                    Label(string(r.values["market"])+" · "+string(r.values["currency"]),systemImage:"person.text.rectangle").font(.system(size:11))
+                }
+            }.padding(8)}
+            Divider()
+            VStack(alignment:.leading,spacing:6){Text("Simulation budget").foregroundStyle(muted);Text(money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"])+" USD").monospacedDigit();Text("Reserve: "+money(object(m.data["funding"])["reserve_usd"])+" USD").foregroundStyle(muted)}.font(.system(size:11)).padding(8)
+        }.frame(maxHeight:.infinity).background(navy)
+    }
+    func navItem(_ p:Page)->some View {
+        Button {page=p} label:{HStack(spacing:6){Image(systemName:p.icon).frame(width:14);Text(p.rawValue);Spacer()}.font(.system(size:11)).padding(.horizontal,5).frame(height:23).foregroundStyle(page==p ? Color.white:ink).background(page==p ? mint:.clear)}.buttonStyle(.plain)
     }
     func actionButton(_ title:String,_ action:String,primary:Bool=false)->some View {
-        Button {m.action(action)} label:{Text(title).font(.system(size:13,weight:.semibold)).padding(.horizontal,16).padding(.vertical,11).background(primary ? mint:Color.white.opacity(0.07),in:RoundedRectangle(cornerRadius:3)).foregroundStyle(primary ? navy:.white)}.buttonStyle(.plain).disabled(m.readOnly || m.busy || !m.connected)
+        Button(title){m.action(action)}.buttonStyle(.bordered).disabled(m.readOnly || m.busy || !m.connected)
     }
     var startPage:some View {
+        VStack(alignment:.leading,spacing:10){
+            ClassicSection(title:"Simulation control"){
+                HStack {actionButton("Supplemental scan","prepare");actionButton("Transport acceptance","probe");Spacer();Text("Signal date: "+string(scan["date"])).foregroundStyle(muted)}
+                HStack(spacing:18){Badge(text:scanActivityLabel,color:m.running("automation") || m.running("scan") ? mint:muted);Badge(text:m.running("news") ? "News running":"News offline",color:m.running("news") ? mint:muted);Text("Strategy: "+strategyStatus(string(object(m.data["strategy"])["status"]))).foregroundStyle(muted)}.font(.system(size:11))
+            }
+            ClassicSection(title:"Market scan summary"){
+                HStack{Text("History coverage");Text("\(Int(number(scan["history_count"])))").monospacedDigit();Divider().frame(height:15);Text("Evaluated");Text("\(Int(number(scan["processed_count"] ?? scan["history_count"]))) / \(Int(number(scan["eligible_count"])))").monospacedDigit();Divider().frame(height:15);Text("Candidates");Text("\(Int(number(scan["candidate_count"])))").monospacedDigit();Spacer()}.font(.system(size:11))
+                Text("Historical scan records. Candidates are not order instructions; no current bid/ask is inferred from this list.").font(.system(size:11)).foregroundStyle(muted)
+            }
+            ClassicSection(title:"Candidate list — historical signals"){
+                Table(records(list(m.data["candidates"]).prefix(50).map{$0})) {
+                    TableColumn("No."){r in Text(String(r.id+1)).monospacedDigit()}.width(36)
+                    TableColumn("Symbol"){r in Text(string(r.values["code"])).font(.system(size:11,design:.monospaced))}.width(min:90,ideal:130)
+                    TableColumn("20-day change"){r in Text(r.values["strength"] is NSNumber ? String(format:"%+.2f%%",number(r.values["strength"])*100):"—").monospacedDigit()}.width(min:95,ideal:125)
+                    TableColumn("Signal date"){_ in Text(string(scan["date"]))}.width(min:90,ideal:120)
+                }.tableStyle(.bordered(alternatesRowBackgrounds:true)).frame(height:250)
+                if list(m.data["candidates"]).isEmpty {Text("No candidates loaded; an absent record is not a buy signal.").foregroundStyle(muted)}
+            }
+            ClassicSection(title:"Diagnostics and acceptance"){
+                Text("Stock transport: "+probeStatus+"   |   Options: "+optionTransportStatus(string(object(m.data["option_transport"])["status"]))).font(.system(size:11))
+                let unresolved=list(m.data["alert_records"]).filter{!yes($0["resolved"])}
+                Text("Unresolved recorded issues: \(unresolved.count). Pause and fault records remain retained.").font(.system(size:11)).foregroundStyle(unresolved.isEmpty ? muted:warning)
+                DisclosureGroup("Show full simulation diagnostics",isExpanded:$showDiagnostics){detailedSimulationPage.padding(.top,8)}
+            }
+        }
+    }
+    var detailedSimulationPage:some View {
         VStack(spacing:20){
             HStack(spacing:14){Metric(title:"Simulation budget",value:money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"]),note:yes(m.data["independent_budget_display"]) ? "US stocks / US options / HK stocks: USD 500 each" : "USD · subject to ledger allocation");Metric(title:"Daily history coverage",value:"\(Int(number(scan["history_count"])))",note:"At least 60 completed daily bars");Metric(title:"Current candidates",value:"\(Int(number(scan["candidate_count"] ?? list(m.data["candidates"]).count)))",note:"Candidates are not buy instructions")}
             Box {
@@ -173,11 +263,11 @@ struct MainView: View {
                 HStack(spacing:8){Badge(text:scanActivityLabel,color:m.running("automation") || m.running("scan") ? mint:muted);Badge(text:m.running("news") ? "News monitoring":"News offline",color:m.running("news") ? mint:muted);Badge(text:m.running("strategy") ? "Strategy simulation running":m.running("probe") ? "Transport test running":string(probe["status"]) == "transport_passed" ? "Transport acceptance passed":"Transport test offline",color:(m.running("strategy") || m.running("probe")) ? mint:muted)}
                 if m.running("automation") {
                     Text("Automatic scan enabled · runs 5 minutes after each trading close. Next: "+localTime(object(m.data["scan_schedule"])["next_run_at"])).font(.caption).foregroundStyle(muted)
-                } else {Text("Scheduler is offline; checking service status.").font(.caption).foregroundStyle(.orange)}
+                } else {Text("Scheduler is offline; checking service status.").font(.caption).foregroundStyle(warning)}
             }
             HStack(alignment:.top,spacing:18){
                 Box {Text("Market coverage").font(.headline);HStack{Text("Symbols evaluated").foregroundStyle(muted);Spacer();Text("\(Int(number(scan["processed_count"] ?? scan["history_count"]))) / \(Int(number(scan["eligible_count"])))").monospacedDigit()};ProgressView(value:min(number(scan["processed_count"] ?? scan["history_count"])/max(number(scan["eligible_count"]),1),1)).tint(mint);Text("Valid daily history \(Int(number(scan["history_count"]))) · Excluded \(Int(number(scan["excluded_count"]))) · Pending \(Int(number(scan["pending_count"])))").font(.caption).foregroundStyle(muted);Text(yes(scan["complete"]) ? "Market scan complete. Exclusions include low prices, suspensions and insufficient history.":"Collecting completed daily bars. Incomplete scans cannot admit new entries.") .font(.caption).foregroundStyle(muted);Text("Signal date "+string(scan["date"])).font(.caption).foregroundStyle(muted)}
-                Box {Text("Simulation acceptance").font(.headline);Badge(text:probeStatus,color:yes(m.data["probe_paused"]) || ["waiting_quote","quote_expired","waiting_spread"].contains(string(probe["status"])) ? .orange:mint);Text("Cancel → buy one unit → sell → reconcile").font(.callout);Text("SIMULATE accounts only. Transport acceptance does not establish profitability or enable live trading.").font(.caption).foregroundStyle(muted);if let wait=probe["quote_wait"] as? [String:Any] {Text("Quote wait \(Int(number(wait["elapsed_seconds"]))) / 120 s · checked every 5 s; cancellation and reconciliation continue").font(.caption).foregroundStyle(muted)};Text("Record "+localTime(probe["updated_at"])).font(.caption).foregroundStyle(muted)}
+                Box {Text("Simulation acceptance").font(.headline);Badge(text:probeStatus,color:yes(m.data["probe_paused"]) || ["waiting_quote","quote_expired","waiting_spread"].contains(string(probe["status"])) ? warning:mint);Text("Cancel → buy one unit → sell → reconcile").font(.callout);Text("SIMULATE accounts only. Transport acceptance does not establish profitability or enable live trading.").font(.caption).foregroundStyle(muted);if let wait=probe["quote_wait"] as? [String:Any] {Text("Quote wait \(Int(number(wait["elapsed_seconds"]))) / 120 s · checked every 5 s; cancellation and reconciliation continue").font(.caption).foregroundStyle(muted)};Text("Record "+localTime(probe["updated_at"])).font(.caption).foregroundStyle(muted)}
             }
             Box {
                 let schedule=object(m.data["scan_schedule"])
@@ -186,11 +276,11 @@ struct MainView: View {
                 Text("Daily scans and strategy simulation").font(.headline)
                 Text("Target trading date "+string(schedule["target_date"])+" · Next closing scan "+localTime(schedule["next_run_at"])).font(.caption).foregroundStyle(muted)
                 Text("Scan status: "+scheduleStatus(string(schedule["status"]))).font(.callout)
-                if let retry=schedule["retry_at"] as? String {Text("Retry at "+localTime(retry)).font(.caption).foregroundStyle(.orange)}
-                if let reason=schedule["reason"] as? String {Text(reason).font(.caption).foregroundStyle(.orange).textSelection(.enabled)}
+                if let retry=schedule["retry_at"] as? String {Text("Retry at "+localTime(retry)).font(.caption).foregroundStyle(warning)}
+                if let reason=schedule["reason"] as? String {Text(reason).font(.caption).foregroundStyle(warning).textSelection(.enabled)}
                 Text("Simulation handoff: "+handoffStatus(string(automation["handoff"]))).font(.callout)
-                if let reason=automation["reason"] as? String {Text(reason).font(.caption).foregroundStyle(.orange)}
-                if let reason=automation["scan_error"] as? String {Text(reason).font(.caption).foregroundStyle(.orange)}
+                if let reason=automation["reason"] as? String {Text(reason).font(.caption).foregroundStyle(warning)}
+                if let reason=automation["scan_error"] as? String {Text(reason).font(.caption).foregroundStyle(warning)}
                 Text("Strategy status: "+strategyStatus(string(strategy["status"]))).font(.callout)
                 Text("Verified adverse news may trigger an early exit before the loss threshold; news collection runs every 2 minutes.").font(.caption).foregroundStyle(muted)
                 if string(strategy["strategy_version"]) == "swing_1_5_v1" {
@@ -201,12 +291,12 @@ struct MainView: View {
                 let temporary=object(strategy["temporary_entry_window"])
                 if string(strategy["entry_timing"]) == "regular_session" {Text("Simulation entries: from 5 minutes after open until regular close; duplicate entries are prevented").font(.caption).foregroundStyle(mint)} else if let expiry=dateValue(string(temporary["expires_at"])),expiry>Date() {Text("Temporary simulation entry window ends at "+localTime(temporary["expires_at"])).font(.caption).foregroundStyle(mint)} else if let day=strategy["entry_after_session"] as? String {Text("Default entry 09:35–09:40 New York; first new buy must be after "+day).font(.caption).foregroundStyle(muted)}
                 let urgent=object(strategy["emergency_exits"])
-                if !urgent.isEmpty {Text("Adverse-news exit pending: "+urgent.keys.sorted().joined(separator:", ")).font(.caption).foregroundStyle(.orange)}
+                if !urgent.isEmpty {Text("Adverse-news exit pending: "+urgent.keys.sorted().joined(separator:", ")).font(.caption).foregroundStyle(warning)}
                 if yes(strategy["candidate_fallback_enabled"]) {Text("Candidate substitution enabled · check up to 10 symbols daily · hold up to 2").font(.caption).foregroundStyle(muted)}
-                if let block=strategy["entry_global_block"] as? [String:Any] {Text("Global news block: "+(block["reasons"] as? [String] ?? []).joined(separator:"；")).font(.caption).foregroundStyle(.orange)}
-                if let reason=strategy["data_block"] as? String {Text(reason).font(.caption).foregroundStyle(.orange)}
-                if let reason=strategy["reason"] as? String {Text(reason).font(.caption).foregroundStyle(.orange)}
-                if let wait=strategy["quote_wait"] as? [String:Any] {Text("Waiting for "+string(wait["code"])+" valid quotes: \(Int(number(wait["elapsed_seconds"]))) / 120 s").font(.caption).foregroundStyle(.orange)}
+                if let block=strategy["entry_global_block"] as? [String:Any] {Text("Global news block: "+(block["reasons"] as? [String] ?? []).joined(separator:"；")).font(.caption).foregroundStyle(warning)}
+                if let reason=strategy["data_block"] as? String {Text(reason).font(.caption).foregroundStyle(warning)}
+                if let reason=strategy["reason"] as? String {Text(reason).font(.caption).foregroundStyle(warning)}
+                if let wait=strategy["quote_wait"] as? [String:Any] {Text("Waiting for "+string(wait["code"])+" valid quotes: \(Int(number(wait["elapsed_seconds"]))) / 120 s").font(.caption).foregroundStyle(warning)}
                 Text("After transport acceptance, reconcile the simulation account before strategy simulation. Simulation acceptance does not arm live trading.").font(.caption).foregroundStyle(muted)
             }
             Box {
@@ -214,7 +304,7 @@ struct MainView: View {
                 Text("Options · independent quote research").font(.headline)
                 Text(optionsStatus(string(options["status"]))).font(.callout)
                 Text("Real quotes with assumed bid/ask fills, not broker execution acceptance. Research up to 20 eligible trend leaders. Research allocation: \(money(options["budget_usd"])) USD; broker execution budget is zero. Actual option simulation uses a separate ledger.").font(.caption).foregroundStyle(muted)
-                if let error=options["error"] as? String {Text(error).font(.caption).foregroundStyle(.orange)}
+                if let error=options["error"] as? String {Text(error).font(.caption).foregroundStyle(warning)}
                 if let retry=options["retry_at"] as? String {Text("Next retry "+localTime(retry)).font(.caption).foregroundStyle(muted)}
             }
             Box {
@@ -223,8 +313,8 @@ struct MainView: View {
                 Text(optionTransportStatus(string(transport["status"]))).font(.callout)
                 Text("Phase: "+string(transport["phase"])+" · Broker orders: \(list(transport["orders"]).count)").font(.caption)
                 if let code=transport["code"] as? String {Text(code).font(.caption)}
-                if let reason=transport["reason"] as? String {Text(reason).font(.caption).foregroundStyle(.orange)}
-                ForEach(transport["alerts"] as? [String] ?? [],id:\.self){message in Text(message).font(.caption).foregroundStyle(.orange)}
+                if let reason=transport["reason"] as? String {Text(reason).font(.caption).foregroundStyle(warning)}
+                ForEach(transport["alerts"] as? [String] ?? [],id:\.self){message in Text(message).font(.caption).foregroundStyle(warning)}
                 Text("Cancellation, buy fills, sell fills and reconciliation are recorded separately. Passing verifies the transport flow, not strategy performance or live readiness.").font(.caption).foregroundStyle(muted)
             }
             let allAlertRows=m.data["alert_records"] as? [[String:Any]] ?? []
@@ -232,7 +322,7 @@ struct MainView: View {
             let resolvedRows=allAlertRows.filter { ($0["resolved"] as? Bool) == true }
             let taskErrors=m.data["errors"] as? [String] ?? []
             if !alertRows.isEmpty || !taskErrors.isEmpty {Box {
-                Label("Attention required · alerts",systemImage:"exclamationmark.triangle").foregroundStyle(.orange)
+                Label("Attention required · alerts",systemImage:"exclamationmark.triangle").foregroundStyle(warning)
                 Text("Issues without confirmed recovery. Times are local.").font(.caption2).foregroundStyle(muted)
                 ForEach(Array(alertRows.enumerated()),id:\.offset){_,row in
                     VStack(alignment:.leading,spacing:5) {
@@ -244,7 +334,7 @@ struct MainView: View {
                     }.padding(.vertical,5)
                     Divider().opacity(0.2)
                 }
-                ForEach(taskErrors,id:\.self){Text($0+" · Timestamp unavailable").font(.caption).foregroundStyle(.orange)}
+                ForEach(taskErrors,id:\.self){Text($0+" · Timestamp unavailable").font(.caption).foregroundStyle(warning)}
             }}
             if !resolvedRows.isEmpty {Box {
                 DisclosureGroup("Resolved · \(resolvedRows.count) issues (view records)") {
@@ -303,29 +393,49 @@ struct MainView: View {
     func handoffStatus(_ value:String)->String {switch value {case "waiting_probe_exit":return "Awaiting transport test completion";case "waiting_interface_acceptance":return "Awaiting transport acceptance";case "strategy_running":return "Strategy simulation running";case "checking_account_and_handoff":return "Reconciling account and ledger";case "blocked":return "Attention required";default:return "Awaiting review"}}
     func strategyStatus(_ value:String)->String {switch value {case "strategy_running":return "Strategy simulation running; acceptance incomplete";case "strategy_passed":return "Strategy acceptance passed; simulation continues";case "paused":return "New buys paused; reconciliation and exits continue";case "stopped":return "Trading stopped; reconciliation and cancellations continue";case "needs_attention":return "Attention required";default:return "Not started"}}
     var pausePage:some View {
-        VStack(spacing:20){Box{HStack{Image(systemName:"pause.circle").font(.system(size:42,weight:.light)).foregroundStyle(.orange);VStack(alignment:.leading,spacing:8){Text("Pause simulation entries").font(.title2.weight(.semibold));Text("Save the pause state first, then attempt to cancel outstanding simulation buy orders.") .foregroundStyle(muted)}};Text("Pausing does not confirm cancellation or automatically close positions. These controls do not manage existing live positions.").font(.callout).foregroundStyle(muted);HStack {actionButton("Pause simulation entries","pause");actionButton("Stop simulation trading","stop")};Badge(text:(yes(m.data["probe_paused"]) || yes(m.data["paper_paused"])) ? "Simulation ledger paused":"See the latest task status",color:.orange)};Box{Text("Operating limits").font(.headline);Text("• Simulation budget \(money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"])) USD; reserve \(money(object(m.data["funding"])["reserve_usd"])) USD\n• Cumulative strategy loss \(money(m.data["loss_limit_usd"])) USD pauses new buys\n• Simulation controls do not enable live trading\n• Closing this window does not stop background tasks\n• Keep the computer online and broker gateway signed in") .font(.callout).foregroundStyle(muted).lineSpacing(9);Button("View operating guide"){m.openFolder("两项准备任务.md")}}}
+        VStack(spacing:20){Box{HStack{Image(systemName:"pause.circle").font(.system(size:42,weight:.light)).foregroundStyle(warning);VStack(alignment:.leading,spacing:8){Text("Pause simulation entries").font(.title2.weight(.semibold));Text("Save the pause state first, then attempt to cancel outstanding simulation buy orders.") .foregroundStyle(muted)}};Text("Pausing does not confirm cancellation or automatically close positions. These controls do not manage existing live positions.").font(.callout).foregroundStyle(muted);HStack {actionButton("Pause simulation entries","pause");actionButton("Stop simulation trading","stop")};Badge(text:(yes(m.data["probe_paused"]) || yes(m.data["paper_paused"])) ? "Simulation ledger paused":"See the latest task status",color:warning)};Box{Text("Operating limits").font(.headline);Text("• Simulation budget \(money(m.data["simulation_total_budget_usd"] ?? m.data["budget_usd"])) USD; reserve \(money(object(m.data["funding"])["reserve_usd"])) USD\n• Cumulative strategy loss \(money(m.data["loss_limit_usd"])) USD pauses new buys\n• Simulation controls do not enable live trading\n• Closing this window does not stop background tasks\n• Keep the computer online and broker gateway signed in") .font(.callout).foregroundStyle(muted).lineSpacing(9);Button("View operating guide"){m.openFolder("两项准备任务.md")}}}
     }
     var positionsPage:some View {
-        VStack(spacing:20){Box{HStack{VStack(alignment:.leading,spacing:6){Text("Existing live positions · read-only").font(.headline);Text("Manual positions are not attributed to the strategy. This page does not submit orders.").font(.caption).foregroundStyle(muted)};Spacer();actionButton("Refresh account positions","account")};Text("Account snapshot: "+localTime(m.data["account_updated"])).font(.caption).foregroundStyle(muted);if let err=m.data["account_error"] as? String {Text(err).foregroundStyle(.orange).font(.caption)}}
-            Box{if list(m.data["positions"]).isEmpty {Empty(icon:"tray",title:"No loaded positions",detail:"Refresh above to fetch an account snapshot. Missing data does not establish an empty account.") } else {ForEach(Array(list(m.data["positions"]).enumerated()),id:\.offset){_,p in VStack(alignment:.leading,spacing:10){HStack{Text(string(p["code"])).font(.headline);Badge(text:string(p["source"]),color:.orange);Spacer();Text("\(Int(number(p["qty"]))) units").font(.title3).monospacedDigit()};Text(string(p["name"])).font(.callout).foregroundStyle(muted)
+        VStack(alignment:.leading,spacing:10){
+            ClassicSection(title:"Position records — read only"){
+                HStack{actionButton("Refresh account positions","account");Spacer();Text("Snapshot: "+localTime(m.data["account_updated"])).foregroundStyle(muted)}
+                Text("Simulation, research and external holdings retain their source labels. Manual positions are not strategy-owned; this page cannot submit orders.").font(.system(size:11)).foregroundStyle(muted)
+                if let error=m.data["account_error"] as? String {Text(error).foregroundStyle(warning)}
+            }
+            Table(records(list(m.data["positions"]))) {
+                TableColumn("Symbol"){r in Text(string(r.values["code"]))}.width(min:85,ideal:105)
+                TableColumn("Source"){r in Text(string(r.values["source"]))}.width(min:115,ideal:160)
+                TableColumn("Qty"){r in Text(optionalMoney(r.values["qty"])).monospacedDigit()}.width(70)
+                TableColumn("CCY"){r in Text(string(r.values["currency"]))}.width(45)
+                TableColumn("Cost"){r in Text(optionalMoney(r.values["buy_price"])).monospacedDigit()}.width(80)
+                TableColumn("Last"){r in Text(optionalMoney(r.values["current_price"])).monospacedDigit()}.width(80)
+                TableColumn("Quote status"){r in Text(string(r.values["price_status"]))}
+            }.tableStyle(.bordered(alternatesRowBackgrounds:true)).frame(height:280).border(rule)
+            if list(m.data["positions"]).isEmpty {Text("No positions loaded. Missing data does not establish an empty account.").foregroundStyle(muted)}
+            DisclosureGroup("Position details, valuation and original source records"){positionDetailsPage.padding(.top,8)}
+        }
+    }
+    var positionDetailsPage:some View {
+        VStack(spacing:20){Box{HStack{VStack(alignment:.leading,spacing:6){Text("Existing live positions · read-only").font(.headline);Text("Manual positions are not attributed to the strategy. This page does not submit orders.").font(.caption).foregroundStyle(muted)};Spacer();actionButton("Refresh account positions","account")};Text("Account snapshot: "+localTime(m.data["account_updated"])).font(.caption).foregroundStyle(muted);if let err=m.data["account_error"] as? String {Text(err).foregroundStyle(warning).font(.caption)}}
+            Box{if list(m.data["positions"]).isEmpty {Empty(icon:"tray",title:"No loaded positions",detail:"Refresh above to fetch an account snapshot. Missing data does not establish an empty account.") } else {ForEach(Array(list(m.data["positions"]).enumerated()),id:\.offset){_,p in VStack(alignment:.leading,spacing:10){HStack{Text(string(p["code"])).font(.headline);Badge(text:string(p["source"]),color:warning);Spacer();Text("\(Int(number(p["qty"]))) units").font(.title3).monospacedDigit()};Text(string(p["name"])).font(.callout).foregroundStyle(muted)
                 HStack {Text(string(p["buy_price_label"]));Spacer();Text(p["buy_price"] is NSNumber ? money(p["buy_price"])+" "+string(p["currency"]) : "No valid records").monospacedDigit()}.font(.callout)
                 HStack {Text("Last price");Spacer();Text(p["current_price"] is NSNumber ? money(p["current_price"])+" "+string(p["currency"]) : "Awaiting valid quotes").monospacedDigit().foregroundStyle(mint)}.font(.callout)
                 Text(string(p["price_status"])+(p["price_time"] is String ? " · "+localTime(p["price_time"]) : "")).font(.caption2).foregroundStyle(muted)
-                Text("Current status: "+string(p["position_status"])).font(.caption).foregroundStyle(.orange)
+                Text("Current status: "+string(p["position_status"])).font(.caption).foregroundStyle(warning)
                 if p["position_updated_at"] is String {Text("Account snapshot: "+localTime(p["position_updated_at"])).font(.caption2).foregroundStyle(muted)}
-                if p["swing_stop"] != nil {Text("Holding day \(Int(number(p["holding_sessions"]))) · Exit reference USD "+money(p["swing_stop"])+" / "+money(p["swing_target"])).font(.caption).foregroundStyle(muted)};if p["market_val"] != nil {HStack{Text("Market value "+money(p["market_val"])+" "+string(p["currency"]));Spacer();Text("Position P&L "+money(p["pl_val"])+" "+string(p["currency"])).foregroundStyle(number(p["pl_val"])>=0 ? mint:.orange)}.font(.caption)};Divider()}.padding(.vertical,8)}}}
+                if p["swing_stop"] != nil {Text("Holding day \(Int(number(p["holding_sessions"]))) · Exit reference USD "+money(p["swing_stop"])+" / "+money(p["swing_target"])).font(.caption).foregroundStyle(muted)};if p["market_val"] != nil {HStack{Text("Market value "+money(p["market_val"])+" "+string(p["currency"]));Spacer();Text("Position P&L "+money(p["pl_val"])+" "+string(p["currency"])).foregroundStyle(number(p["pl_val"])>=0 ? mint:warning)}.font(.caption)};Divider()}.padding(.vertical,8)}}}
         }
     }
     var returnsPage:some View {
         VStack(spacing:20){Box{HStack{Text("Strategy weekly returns").font(.headline);Spacer();Badge(text:"USD · original dollar values")};Text("Strategy ledger only; excludes existing live positions and transport tests. Includes fees, excludes budget transfers, taxes and dividends.").font(.caption).foregroundStyle(muted)
             if list(m.data["marks"]).isEmpty {Empty(icon:"chart.xyaxis.line",title:"No strategy return records",detail:"No recorded strategy performance is available yet. Equity and weekly returns appear after strategy simulation produces valuations.") } else {Chart {ForEach(Array(list(m.data["marks"]).enumerated()),id:\.offset){i,r in LineMark(x:.value("Record",i),y:.value("Equity USD",number(r["equity"]))).foregroundStyle(mint)}}.frame(height:230)}}
-            if !list(m.data["weeks"]).isEmpty {Box{ForEach(Array(list(m.data["weeks"]).enumerated()),id:\.offset){_,r in HStack{Text(string(r["week"]));Spacer();Text(String(format:"%+.2f USD",number(r["pnl"]))).foregroundStyle(number(r["pnl"])>=0 ? mint:.orange);Text("Equity "+money(r["equity"])).frame(width:130,alignment:.trailing)}.padding(.vertical,7)}}}
+            if !list(m.data["weeks"]).isEmpty {Box{ForEach(Array(list(m.data["weeks"]).enumerated()),id:\.offset){_,r in HStack{Text(string(r["week"]));Spacer();Text(String(format:"%+.2f USD",number(r["pnl"]))).foregroundStyle(number(r["pnl"])>=0 ? mint:warning);Text("Equity "+money(r["equity"])).frame(width:130,alignment:.trailing)}.padding(.vertical,7)}}}
             if !object(m.data["swing_research"]).isEmpty {Box {
                 let research=object(m.data["swing_research"])
                 Text("Historical daily comparison · separate research").font(.headline)
                 Text("Historical comparison uses an initial USD 600; subject to survivorship bias, without historical news replay. Excluded from simulation returns above.").font(.caption).foregroundStyle(muted)
                 ForEach(Array(list(research["results"]).enumerated()),id:\.offset){_,r in
-                    Text((string(r["mode"]) == "swing" ? "Swing version":"Original strategy")+String(format:" · One-way friction %.2f%% · P&L %+.2f USD · Max drawdown %.2f%%",number(r["friction_per_side"])*100,number(r["ending_equity_usd"])-number(r["initial_usd"]),number(r["max_drawdown"])*100)).font(.caption).foregroundStyle(number(r["ending_equity_usd"])-number(r["initial_usd"])>=0 ? mint:.orange)
+                    Text((string(r["mode"]) == "swing" ? "Swing version":"Original strategy")+String(format:" · One-way friction %.2f%% · P&L %+.2f USD · Max drawdown %.2f%%",number(r["friction_per_side"])*100,number(r["ending_equity_usd"])-number(r["initial_usd"]),number(r["max_drawdown"])*100)).font(.caption).foregroundStyle(number(r["ending_equity_usd"])-number(r["initial_usd"])>=0 ? mint:warning)
                 }
                 Text("The swing version has not established profitability. Historical comparisons cannot replace full strategy simulation acceptance.").font(.caption).foregroundStyle(muted)
             }}
@@ -337,12 +447,12 @@ struct MainView: View {
                 Text("Research: top 20 trend leaders · Symbols completed: \(Int(number(cycle["scanned"]))) · Contracts read: \(Int(number(cycle["contracts"])))").font(.caption).foregroundStyle(muted)
                 if let code=options["current_underlying"] as? String {Text("Researching "+code).font(.caption).foregroundStyle(muted)}
                 Text("Paper entry/exit orders: \(Int(number(options["trades"]))) · Completed round trips: \(Int(number(options["closed_trades"]))) times").font(.callout)
-                if options["pnl_usd"] is NSNumber {Text(String(format:"Research P&L %+.2f USD",number(options["pnl_usd"]))).foregroundStyle(number(options["pnl_usd"])>=0 ? mint:.orange)} else {Text("Valuation awaiting valid quotes").foregroundStyle(.orange)}
+                if options["pnl_usd"] is NSNumber {Text(String(format:"Research P&L %+.2f USD",number(options["pnl_usd"]))).foregroundStyle(number(options["pnl_usd"])>=0 ? mint:warning)} else {Text("Valuation awaiting valid quotes").foregroundStyle(warning)}
                 Text("\(string(options["note"]))").font(.caption).foregroundStyle(muted)
                 let reasons=object(cycle["counts"])
                 ForEach(reasons.keys.sorted(),id:\.self){key in Text(optionExclusion(key)+"：\(Int(number(reasons[key])))").font(.caption).foregroundStyle(muted)}
-                if let warning=options["warning"] as? String {Text(warning).font(.caption).foregroundStyle(.orange)}
-                ForEach(options["alerts"] as? [String] ?? [],id:\.self){message in Text(message).font(.caption).foregroundStyle(.orange)}
+                if let warningMessage=options["warning"] as? String {Text(warningMessage).font(.caption).foregroundStyle(warning)}
+                ForEach(options["alerts"] as? [String] ?? [],id:\.self){message in Text(message).font(.caption).foregroundStyle(warning)}
                 ForEach(Array(list(options["weeks"]).enumerated()),id:\.offset){_,r in Text(string(r["week"])+String(format:" · %+.2f USD",number(r["pnl_usd"]))).font(.caption)}
             }
             Box{Text("Weekly targets are observation metrics").font(.headline);Text("Positions roll continuously; no forced weekly sale or withdrawal. No fixed weekly return is guaranteed. Missing records are not filled with zero returns.").font(.callout).foregroundStyle(muted);Button("Open reports folder"){m.openFolder("data/trading")}}
@@ -350,14 +460,46 @@ struct MainView: View {
     }
     var filteredEvents:[[String:Any]] {list(m.data["events"]).filter {e in (newsSource=="All" || string(e["provider"])==newsSource || string(e["feed"])==newsSource) && (query.isEmpty || (string(e["title"])+string(e["source"])).localizedCaseInsensitiveContains(query))}}
     var newsPage:some View {
-        VStack(spacing:20){Box{HStack{Text("External news monitoring").font(.headline);Spacer();Badge(text:m.running("news") ? "Monitoring automatically":"Connecting automatically",color:m.running("news") ? mint:.orange)};Text("Collection and rule analysis run every 2 minutes after startup; source limits defer retries. Pausing trading does not pause news.").font(.caption).foregroundStyle(muted);Text("Next collection "+localTime(object(m.data["news_schedule"])["next_run_at"])).font(.caption).foregroundStyle(muted);Text("Snapshot "+localTime(m.data["news_updated"])+" · Publication time, source verification and market impact assessed separately").font(.caption).foregroundStyle(muted)
-            LazyVGrid(columns:[GridItem(.adaptive(minimum:180))],alignment:.leading,spacing:10){ForEach(Array(list(m.data["sources"]).enumerated()),id:\.offset){_,s in let date=dateValue(string(s["checked_at"]));let fresh=date.map {Date().timeIntervalSince($0)>=0 && Date().timeIntervalSince($0)<=number(m.data["news_max_age_seconds"] ?? 300)} ?? false;HStack{Circle().fill(yes(s["ok"]) && fresh ? mint:Color.orange).frame(width:6,height:6);Text(sourceName(string(s["name"]))).font(.caption);Spacer();Text(string(s["status"])=="disabled_by_configuration" ? "Disabled":(!fresh ? "Expired":(yes(s["ok"]) ? "Healthy":"Review pending"))).font(.caption2).foregroundStyle(muted)}.padding(10).background(.white.opacity(0.035),in:RoundedRectangle(cornerRadius:8))}}
-            HStack{TextField("Search headline or source",text:$query).textFieldStyle(.roundedBorder);Picker("Source",selection:$newsSource){Text("All").tag("All");ForEach(list(m.data["sources"]).compactMap{$0["name"] as? String},id:\.self){name in Text(sourceName(name)).tag(name)}}.frame(width:220)}}
+        VStack(alignment:.leading,spacing:10){
+            ClassicSection(title:"News monitor"){
+                HStack{TextField("Search headline or source",text:$query);Picker("Source",selection:$newsSource){Text("All").tag("All");ForEach(list(m.data["sources"]).compactMap{$0["name"] as? String},id:\.self){name in Text(sourceName(name)).tag(name)}}.frame(width:200)}.textFieldStyle(.squareBorder)
+                HStack {Badge(text:m.running("news") ? "Collector running":"Collector offline",color:m.running("news") ? mint:muted);Text("Last snapshot: "+localTime(m.data["news_updated"])).foregroundStyle(muted);Spacer();Text("\(filteredEvents.count) records")}.font(.system(size:11))
+            }
+            ClassicSection(title:"Headlines — original publication times"){
+                Table(records(filteredEvents)) {
+                    TableColumn("Source"){r in Text(string(r.values["source"]))}.width(145)
+                    TableColumn("Headline"){r in Text(string(r.values["title"])).help(string(r.values["title"]))}
+                    TableColumn("Published"){r in Text(localTime(r.values["published_at"]))}.width(115)
+                    TableColumn("Rule state"){r in Text(actionName(string(r.values["action"]))) }.width(120)
+                    TableColumn("Link"){r in
+                        if let raw=r.values["url"] as? String,let url=URL(string:raw),url.scheme=="https" {Link("Source",destination:url)} else {Text("—")}
+                    }.width(50)
+                }.tableStyle(.bordered(alternatesRowBackgrounds:true)).frame(height:280)
+                Text("Historical / unverified records are retained. A headline is not an executable order signal.").font(.system(size:11)).foregroundStyle(muted)
+            }
+            ClassicSection(title:"Feed health"){
+                Table(records(list(m.data["sources"]))) {
+                    TableColumn("Feed"){r in Text(sourceName(string(r.values["name"]))) }
+                    TableColumn("Status"){r in
+                        let date=dateValue(string(r.values["checked_at"]))
+                        let fresh=date.map {Date().timeIntervalSince($0)>=0 && Date().timeIntervalSince($0)<=number(m.data["news_max_age_seconds"] ?? 300)} ?? false
+                        Text(string(r.values["status"])=="disabled_by_configuration" ? "Disabled":(!fresh ? "Expired":(yes(r.values["ok"]) ? "Healthy":"Review pending")))
+                    }.width(110)
+                    TableColumn("Checked"){r in Text(localTime(r.values["checked_at"]))}.width(130)
+                }.tableStyle(.bordered(alternatesRowBackgrounds:true)).frame(height:135)
+            }
+            DisclosureGroup("Full news analysis and source details"){newsDetailsPage.padding(.top,8)}
+        }
+    }
+    var newsDetailsPage:some View {
+        VStack(spacing:20){Box{HStack{Text("External news monitoring").font(.headline);Spacer();Badge(text:m.running("news") ? "Monitoring automatically":"Connecting automatically",color:m.running("news") ? mint:warning)};Text("Collection and rule analysis run every 2 minutes after startup; source limits defer retries. Pausing trading does not pause news.").font(.caption).foregroundStyle(muted);Text("Next collection "+localTime(object(m.data["news_schedule"])["next_run_at"])).font(.caption).foregroundStyle(muted);Text("Snapshot "+localTime(m.data["news_updated"])+" · Publication time, source verification and market impact assessed separately").font(.caption).foregroundStyle(muted)
+            LazyVGrid(columns:[GridItem(.adaptive(minimum:180))],alignment:.leading,spacing:10){ForEach(Array(list(m.data["sources"]).enumerated()),id:\.offset){_,s in let date=dateValue(string(s["checked_at"]));let fresh=date.map {Date().timeIntervalSince($0)>=0 && Date().timeIntervalSince($0)<=number(m.data["news_max_age_seconds"] ?? 300)} ?? false;HStack{Circle().fill(yes(s["ok"]) && fresh ? mint:warning).frame(width:6,height:6);Text(sourceName(string(s["name"]))).font(.caption);Spacer();Text(string(s["status"])=="disabled_by_configuration" ? "Disabled":(!fresh ? "Expired":(yes(s["ok"]) ? "Healthy":"Review pending"))).font(.caption2).foregroundStyle(muted)}.padding(10).background(navy).border(rule)}}
+            HStack{TextField("Search headline or source",text:$query).textFieldStyle(.squareBorder);Picker("Source",selection:$newsSource){Text("All").tag("All");ForEach(list(m.data["sources"]).compactMap{$0["name"] as? String},id:\.self){name in Text(sourceName(name)).tag(name)}}.frame(width:220)}}
             Box {
                 Text("News opportunities · separate simulation budgets").font(.headline)
                 Text("Verified positive news can link eligible US/HK symbols outside the watchlist. History, strategy, quotes and account risk checks still apply. First simulation buy requires valid news evidence; USD 390 reserve remains untouched. News integration does not establish execution acceptance.").font(.caption).foregroundStyle(muted)
             }
-            if filteredEvents.isEmpty {Box{Empty(icon:"newspaper",title:"No matching news",detail:"News updates in the background. Review source health or change filters.")}} else {ForEach(Array(filteredEvents.enumerated()),id:\.offset){_,e in Box{HStack{Text(string(e["source"])).font(.caption.weight(.medium)).foregroundStyle(mint);Spacer();Badge(text:actionName(string(e["action"])),color:string(e["action"])=="block" ? .orange:muted)};Text(string(e["title"])).font(.system(size:16,weight:.medium)).textSelection(.enabled);HStack{Text("Published "+localTime(e["published_at"]));Spacer();Text("Collected "+localTime(e["observed_at"]))}.font(.caption2).foregroundStyle(muted);let analysis=object(e["analysis"]);ForEach(analysis["hypotheses"] as? [String] ?? [],id:\.self){x in Text(x).font(.callout).foregroundStyle(muted)};Text(string(e["reason"])).font(.caption).foregroundStyle(muted);if let raw=e["url"] as? String,let u=URL(string:raw),u.scheme=="https" {Link("Open source ↗",destination:u).font(.caption).foregroundStyle(mint)}}}
+            if filteredEvents.isEmpty {Box{Empty(icon:"newspaper",title:"No matching news",detail:"News updates in the background. Review source health or change filters.")}} else {ForEach(Array(filteredEvents.enumerated()),id:\.offset){_,e in Box{HStack{Text(string(e["source"])).font(.caption.weight(.medium)).foregroundStyle(mint);Spacer();Badge(text:actionName(string(e["action"])),color:string(e["action"])=="block" ? warning:muted)};Text(string(e["title"])).font(.system(size:16,weight:.medium)).textSelection(.enabled);HStack{Text("Published "+localTime(e["published_at"]));Spacer();Text("Collected "+localTime(e["observed_at"]))}.font(.caption2).foregroundStyle(muted);let analysis=object(e["analysis"]);ForEach(analysis["hypotheses"] as? [String] ?? [],id:\.self){x in Text(x).font(.callout).foregroundStyle(muted)};Text(string(e["reason"])).font(.caption).foregroundStyle(muted);if let raw=e["url"] as? String,let u=URL(string:raw),u.scheme=="https" {Link("Open source ↗",destination:u).font(.caption).foregroundStyle(mint)}}}
         }
     }
     }
@@ -365,77 +507,86 @@ struct MainView: View {
         Button(title){m.liveAction(["action":action])}.buttonStyle(.bordered)
             .disabled(m.readOnly || !m.connected || m.busy)
     }
+    var liveMarketRows:[DesktopRecord] {records(list(object(m.data["live"])["markets"]))}
+    var liveOrderRows:[DesktopRecord] {
+        records(list(object(m.data["live"])["markets"]).flatMap {market in list(market["orders"]).map {order in var row=order;row["market"]=market["market"];row["currency"]=market["currency"];return row}})
+    }
+    var livePositionRows:[DesktopRecord] {
+        records(list(object(m.data["live"])["markets"]).flatMap {market in list(market["positions"]).map {position in var row=position;row["market"]=market["market"];return row}})
+    }
     var livePage:some View {
         let live=object(m.data["live"])
-        return VStack(alignment:.leading,spacing:20){
-            HStack(spacing:24){
-                VStack(alignment:.leading,spacing:6){Text("CASH EQUITIES").font(.system(size:10,weight:.semibold)).tracking(1).foregroundStyle(muted);Text("US / Hong Kong").font(.system(size:16,weight:.medium))}
-                Spacer()
-                VStack(alignment:.leading,spacing:6){Text("EXECUTION").font(.system(size:9)).foregroundStyle(muted);Badge(text:liveStatus(live),color:yes(live["enabled"]) ? Color.green:muted)}
-                Divider().frame(height:28)
-                VStack(alignment:.leading,spacing:6){Text("MAINTENANCE").font(.system(size:9)).foregroundStyle(muted);Badge(text:m.running("live_runner") ? "RUNNING":"OFFLINE",color:m.running("live_runner") ? Color.green:muted)}
-                Divider().frame(height:28)
-                VStack(alignment:.leading,spacing:6){Text("POSITION LIMIT").font(.system(size:9)).foregroundStyle(muted);Text("2 symbols · cash only").font(.system(size:11,design:.monospaced))}
-            }.padding(.bottom,16).overlay(alignment:.bottom){Rectangle().fill(.white.opacity(0.1)).frame(height:1)}
-            if yes(live["loss_latched"]) {Label("Joint loss limit latched · new buys blocked",systemImage:"exclamationmark.triangle").foregroundStyle(.orange)}
-            HStack(alignment:.top,spacing:16){
-                VStack(alignment:.leading,spacing:16){
-                    Box {Text("Account setup").font(.system(size:13,weight:.semibold))
-                Text("Configure REAL account IDs, cash budgets and loss limits. US: USD · HK: HKD. Automatic entries default to off.").font(.system(size:12)).foregroundStyle(muted)
-                HStack {liveButton("New configuration","template");Button("Edit configuration"){m.openFolder("data/trading/live/config.json")};liveButton("HK FX reference","refresh_fx")}
-                Text("A matching natural simulation round trip, clean reconciliation and current protection tests are required before enable. Unlock trading manually in your broker gateway; no trading password is collected here.").font(.system(size:12)).foregroundStyle(muted)
-                VStack(alignment:.leading,spacing:8){liveButton("Run protection checks","validate");liveButton("Verify & bind accounts","prepare")}
-                ForEach(Array(list(live["markets"]).enumerated()),id:\.offset) { _,row in
-                    Text(string(row["market"])+" · "+money(row["budget_native"])+" "+string(row["currency"])+" · pending "+String(Int(number(row["pending"])))+" · alerts "+String(Int(number(row["alerts"])))).font(.system(size:12)).monospacedDigit()
-                    ForEach(Array(list(row["positions"]).enumerated()),id:\.offset) { _,position in
-                        Text("Owned: "+string(position["code"])+" · "+money(position["qty"])+" shares").font(.system(size:12))
-                    }
-                    ForEach(Array(list(row["orders"]).enumerated()),id:\.offset) { _,order in
-                        Text(string(order["side"])+" "+string(order["code"])+" · "+money(order["filled"])+" / "+money(order["qty"])+" · limit "+money(order["limit"])+" "+string(row["currency"])+" · "+string(order["status"])+(yes(order["cancel_requested"]) ? " · CANCEL REQUESTED":"")+(yes(order["fee_final"]) ? "":" · FEES PENDING")).font(.caption).foregroundStyle(muted)
-                    }
+        return HStack(alignment:.top,spacing:10){
+            VStack(alignment:.leading,spacing:10){
+                ClassicSection(title:"Account / execution status"){
+                    HStack {Text("Execution:");Text(liveStatus(live)).fontWeight(.semibold);Spacer();Text(m.running("live_runner") ? "Worker: running":"Worker: offline").foregroundStyle(muted)}
+                    if yes(live["loss_latched"]) {Text("Loss limit latched. New buys blocked.").foregroundStyle(warning)}
+                    Table(liveMarketRows) {
+                        TableColumn("Market"){r in Text(string(r.values["market"]))}.width(60)
+                        TableColumn("Budget"){r in Text(optionalMoney(r.values["budget_native"])).monospacedDigit()}.width(min:65,ideal:90)
+                        TableColumn("CCY"){r in Text(string(r.values["currency"]))}.width(45)
+                        TableColumn("Pending"){r in Text(String(Int(number(r.values["pending"]))))}.width(60)
+                        TableColumn("Alerts"){r in Text(String(Int(number(r.values["alerts"]))))}.width(50)
+                    }.tableStyle(.bordered(alternatesRowBackgrounds:true)).frame(height:100)
+                    if liveMarketRows.isEmpty {Text("No bound REAL account records. Configure and verify accounts before enabling.").font(.system(size:11)).foregroundStyle(muted)}
+                    HStack {liveButton("New config","template");Button("Edit config"){m.openFolder("data/trading/live/config.json")};liveButton("HK FX","refresh_fx");Spacer()}
+                    HStack {liveButton("Protection checks","validate");liveButton("Verify & bind","prepare");Spacer()}
                 }
-            }
-                    Box {Text("Execution controls").font(.system(size:13,weight:.semibold))
-                Text("Enable the portfolio, then start its worker separately. First orders require a later trading session; app launch never starts live execution.").font(.system(size:12)).foregroundStyle(muted)
-                TextField("Type ENABLE LIVE STOCKS",text:$liveConfirmation).textFieldStyle(.roundedBorder)
-                HStack {
+                ClassicSection(title:"Strategy-owned live positions"){
+                    Table(livePositionRows) {
+                        TableColumn("Market"){r in Text(string(r.values["market"]))}.width(60)
+                        TableColumn("Symbol"){r in Text(string(r.values["code"]))}
+                        TableColumn("Quantity"){r in Text(optionalMoney(r.values["qty"])).monospacedDigit()}.width(95)
+                    }.tableStyle(.bordered(alternatesRowBackgrounds:true)).frame(height:90)
+                    if livePositionRows.isEmpty {Text(liveMarketRows.isEmpty ? "Positions not loaded; account is not bound.":"No strategy-owned positions in the local record. Verify reconciliation before trading.").font(.system(size:11)).foregroundStyle(muted)}
+                }
+                ClassicSection(title:"Order records — latest 10 per market"){
+                    Table(liveOrderRows) {
+                        TableColumn("Side"){r in Text(string(r.values["side"]))}.width(38)
+                        TableColumn("Symbol"){r in Text(string(r.values["code"]))}.width(min:85,ideal:105)
+                        TableColumn("Filled / Qty"){r in Text(optionalMoney(r.values["filled"])+" / "+optionalMoney(r.values["qty"]))}.width(min:85,ideal:95)
+                        TableColumn("Limit / CCY"){r in Text(optionalMoney(r.values["limit"])+" "+string(r.values["currency"]))}.width(min:80,ideal:100)
+                        TableColumn("Status"){r in Text(string(r.values["status"])+(yes(r.values["cancel_requested"]) ? " · CANCEL REQUESTED":"")+(yes(r.values["fee_final"]) ? "":" · FEES PENDING"))}
+                    }.tableStyle(.bordered(alternatesRowBackgrounds:true)).frame(height:120)
+                    Text("Timeout / unknown result: inspect and reconcile before retrying.").font(.system(size:11)).foregroundStyle(warning)
+                }
+            }.frame(maxWidth:.infinity)
+            VStack(alignment:.leading,spacing:10){
+                ClassicSection(title:"Order entry — REAL cash stocks"){
+                    HStack {Text("Market").frame(width:72,alignment:.leading);Picker("",selection:$liveMarket){Text("US").tag("US");Text("HK").tag("HK")}.labelsHidden();Spacer()}
+                    Picker("Side",selection:$liveSide){Text("Buy").tag("BUY");Text("Sell").tag("SELL")}.pickerStyle(.segmented)
+                    HStack {Text("Symbol").frame(width:72,alignment:.leading);TextField("US.AAPL / HK.00700",text:$liveCode)}
+                    HStack {Text("Quantity").frame(width:72,alignment:.leading);TextField("Whole shares / lots",text:$liveQuantity)}
+                    HStack {Text("Limit price").frame(width:72,alignment:.leading);TextField(liveMarket=="US" ? "USD":"HKD",text:$liveLimit)}
+                    Divider()
+                    Text("Confirmation").foregroundStyle(muted)
+                    TextField("Type PLACE LIVE ORDER",text:$orderConfirmation)
+                    Button("Submit REAL limit order") {
+                        m.liveAction(["action":"order","market":liveMarket,"side":liveSide,"code":liveCode.trimmingCharacters(in:.whitespacesAndNewlines),"qty":liveQuantity,"limit":liveLimit,"confirmation":orderConfirmation,"request_id":UUID().uuidString.replacingOccurrences(of:"-",with:"").lowercased()]);orderConfirmation=""
+                    }.buttonStyle(.bordered).disabled(m.readOnly || !m.connected || m.busy || orderConfirmation != "PLACE LIVE ORDER")
+                    Text("Fixed limit · cancellation due in 60 s").font(.system(size:10)).foregroundStyle(muted)
+                    Text("Requires an enabled portfolio, running worker and all admission checks. Manual holdings cannot be sold here.").font(.system(size:10)).foregroundStyle(muted)
+                }
+                ClassicSection(title:"Execution control"){
+                    TextField("Type ENABLE LIVE STOCKS",text:$liveConfirmation)
                     Button("Enable live stocks") {m.liveAction(["action":"enable","confirmation":liveConfirmation]);liveConfirmation=""}
                         .disabled(m.readOnly || !m.connected || m.busy || liveConfirmation != "ENABLE LIVE STOCKS")
-                    liveButton("Start worker","start")
-                    liveButton("Reconcile once","maintain")
-                }.buttonStyle(.bordered)
-                HStack {
-                    Button("Pause live buys"){m.liveAction(["action":"pause"])}
-                    Button("Latch live stop"){m.liveAction(["action":"stop"])}
-                }.buttonStyle(.bordered).disabled(m.readOnly || !m.connected)
-                Text("Pause retains owned-position exits, cancellation and reconciliation. Stop cancels orders and blocks new order submissions, including automatic exits; reconcile any remaining holdings manually. Neither button guarantees a flat account.").font(.caption).foregroundStyle(muted)
-            }
-                }.frame(maxWidth:.infinity)
-                VStack(alignment:.leading,spacing:16){
-                    Box {Text("Limit order").font(.system(size:13,weight:.semibold))
-                Text("Portfolio must be enabled with its worker running. New buys require scan, instrument, quote, news, cash and risk checks. Manual holdings cannot be sold here.").font(.system(size:12)).foregroundStyle(muted)
-                HStack {
-                    Picker("Market",selection:$liveMarket){Text("US").tag("US");Text("HK").tag("HK")}.frame(width:125)
-                    Picker("Side",selection:$liveSide){Text("BUY").tag("BUY");Text("SELL").tag("SELL")}.frame(width:125)
+                    HStack {liveButton("Start worker","start");liveButton("Reconcile once","maintain")}
+                    HStack {
+                        Button("Pause live buys"){m.liveAction(["action":"pause"])}
+                        Button("Latch live stop"){m.liveAction(["action":"stop"])}
+                    }.buttonStyle(.bordered).disabled(m.readOnly || !m.connected)
+                    Text("Pause retains exits. Stop blocks new orders, including automatic exits. Holdings may remain.").font(.system(size:10)).foregroundStyle(warning)
                 }
-                TextField("Symbol · US.AAPL / HK.00700",text:$liveCode).textFieldStyle(.roundedBorder)
-                HStack {TextField("Whole shares / board lots",text:$liveQuantity);TextField("Limit price (USD / HKD)",text:$liveLimit)}.textFieldStyle(.roundedBorder)
-                TextField("Type PLACE LIVE ORDER",text:$orderConfirmation).textFieldStyle(.roundedBorder)
-                Button("Submit REAL limit order") {
-                    m.liveAction(["action":"order","market":liveMarket,"side":liveSide,"code":liveCode.trimmingCharacters(in:.whitespacesAndNewlines),"qty":liveQuantity,"limit":liveLimit,"confirmation":orderConfirmation,"request_id":UUID().uuidString.replacingOccurrences(of:"-",with:"").lowercased()]);orderConfirmation=""
-                }.buttonStyle(.bordered).disabled(m.readOnly || !m.connected || m.busy || orderConfirmation != "PLACE LIVE ORDER")
-                Text("Each request has a unique identity. A timeout means inspect and reconcile; never assume rejection or submit a replacement. Orders retain their fixed limits and are due for cancellation after 60 seconds.").font(.caption).foregroundStyle(muted)
-            }
-                    Box {Text("Activity").font(.system(size:13,weight:.semibold))
-                let report=object(live["report"])
-                Text(string(report["status"]));Text(string(report["message"])).foregroundStyle(muted)
-                Text("Updated "+localTime(report["checked_at"])).font(.caption).foregroundStyle(muted)
-                Button("Open live setup guide"){m.openFolder("docs/live-trading.md")}
-            }
-                    Text("US / HK common stocks only. Options and futures are disabled. Fixed limits; cancellation due after 60 seconds. USD 390 reserve is excluded.").font(.system(size:11)).foregroundStyle(muted)
-                }.frame(width:350)
-            }
-        }.font(.system(size:12)).controlSize(.small)
+                ClassicSection(title:"Last operation"){
+                    let report=object(live["report"])
+                    Text(string(report["status"])).fontWeight(.semibold)
+                    Text(string(report["message"])).font(.system(size:11))
+                    Text(localTime(report["checked_at"])).font(.system(size:10)).foregroundStyle(muted)
+                    Button("Help / trading rules"){showHelp=true}
+                }
+            }.frame(width:286).textFieldStyle(.squareBorder)
+        }.font(.system(size:11)).controlSize(.small)
     }
 
     func sourceName(_ s:String)->String { ["fed_policy":"Federal Reserve · policy","fed_speech":"Federal Reserve · speeches","whitehouse":"White House","bbc_business":"BBC Business","reuters_index":"Reuters · public index","x":"X" ][s] ?? s }
@@ -443,5 +594,17 @@ struct MainView: View {
 }
 
 @main struct QuantDesktop:App {
-    var body:some Scene {WindowGroup("AegisQuant") {MainView()}.defaultSize(width:1220,height:820).windowStyle(.hiddenTitleBar)}
+    var body:some Scene {
+        WindowGroup("AegisQuant — Securities Terminal") {MainView()}
+            .defaultSize(width:1300,height:820)
+            .commands {
+                CommandMenu("Workspace") {
+                    ForEach(Page.allCases,id:\.self){page in
+                        Button(page.rawValue){NotificationCenter.default.post(name:Notification.Name("AegisNavigate"),object:page.rawValue)}
+                    }
+                    Divider()
+                    Button("Refresh records"){NotificationCenter.default.post(name:Notification.Name("AegisRefresh"),object:nil)}.keyboardShortcut("r",modifiers:.command)
+                }
+            }
+    }
 }

@@ -21,7 +21,7 @@ Publication does not establish live readiness, completed execution acceptance or
 
 ![Live Trading controls in the English macOS application, execution disabled](docs/images/aegisquant-live-controls-en.png)
 
-The actual English macOS **Live Trading** workspace with a two-column layout, showing securities account configuration, validation, explicit enable and execution controls. Live execution is disabled and its worker is offline in this capture; no real order was submitted. The USD 1,500 sidebar amount belongs to the separate simulation budget, not live funds or account equity.
+The actual English macOS **Live Trading** screen uses a traditional desktop layout: native menus and toolbar, a navigation tree, bordered tables and a fixed order-entry pane. Account preparation, explicit enable and execution controls are grouped separately; operating rules are available in Help. Live execution is disabled and its worker is offline in this capture; no real order was submitted. The USD 1,500 sidebar amount belongs to the separate simulation budget, not live funds or account equity.
 
 
 ### News monitoring
