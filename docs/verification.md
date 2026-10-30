@@ -35,4 +35,9 @@ The public repository now contains the securities console and its supporting too
 
 ### Homepage screenshot selection
 
-The first screenshot in all three README editions now shows the actual English Live Trading controls; the live execution section shows the actual limit-order ticket. The simulation Overview is no longer the homepage screenshot. Both captures retain the disabled/offline state and do not claim a connected REAL account or real fills.
+The first screenshot in all three README editions now shows the actual English Live Trading controls; the gallery also shows news monitoring and the simulation overview. The simulation Overview is no longer the homepage screenshot. Both captures retain the disabled/offline state and do not claim a connected REAL account or real fills.
+
+
+### Native workspace layout review · 2026-10-31
+
+The native SwiftUI application builds successfully with a compact graphite layout, shared status bar and a two-column Live Trading workspace. Existing action payloads and disabled guards were compared with the previous source and preserved. Screenshots were captured from the built application using a local status service with POST rejected and AEGIS_READ_ONLY=1. No execution worker or broker connection was started. News and simulation records are historical. This presentation-only change does not change the Python protection fingerprint or provide REAL execution acceptance.

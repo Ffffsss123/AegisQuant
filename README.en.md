@@ -21,14 +21,14 @@ Publication does not establish live readiness, completed execution acceptance or
 
 ![Live Trading controls in the English macOS application, execution disabled](docs/images/aegisquant-live-controls-en.png)
 
-The actual English macOS **Live Trading** page, showing securities account configuration, validation, explicit enable and execution controls. Live execution is disabled and its worker is offline in this capture; no real order was submitted. The USD 1,500 sidebar amount belongs to the separate simulation budget, not live funds or account equity.
+The actual English macOS **Live Trading** workspace with a two-column layout, showing securities account configuration, validation, explicit enable and execution controls. Live execution is disabled and its worker is offline in this capture; no real order was submitted. The USD 1,500 sidebar amount belongs to the separate simulation budget, not live funds or account equity.
 
 
-### Live limit-order ticket
+### News monitoring
 
-![English live limit-order ticket](docs/images/aegisquant-live-ticket-en.png)
+![English news monitoring workspace](docs/images/aegisquant-news-en.png)
 
-The actual application’s order preparation and per-order confirmation panel. Live execution remains disabled in this capture; no real order was submitted.
+Source health, search and the news list in the actual application. This capture retains historical news and expired-source states; its collector is offline and the feed is not live.
 
 ### Simulation overview and strategy status
 
@@ -101,7 +101,7 @@ The **Reconcile once** operation services reconciliation and due cancellations o
 
 Follow the [step-by-step live guide](docs/live-trading.md) before any account operation. The live path uses the original daily-trend engine; the simulation ATR swing engine has not been promoted to live execution.
 
-![Live limit-order ticket in the English application, execution disabled](docs/images/aegisquant-live-ticket-en.png)
+Account setup, execution controls and the limit-order ticket now share one screen; see the Live Trading workspace above.
 
 ## Connect your securities API
 

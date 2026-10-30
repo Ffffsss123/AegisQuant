@@ -72,7 +72,7 @@ If you enable `automatic_entries`, the running worker may create REAL orders whe
 
 ## 4. Submit and inspect a limit-order ticket
 
-![Live limit-order ticket, disabled](images/aegisquant-live-ticket-en.png)
+![Live Trading workspace and limit-order ticket, disabled](images/aegisquant-live-controls-en.png)
 
 With an armed portfolio and a running worker, enter the market, stock code, BUY/SELL, whole shares/board-lot quantity and native-currency limit price. Type `PLACE LIVE ORDER` and submit. A SELL can close only a position owned by the live strategy; it cannot sell a manual baseline holding or create a short.
 

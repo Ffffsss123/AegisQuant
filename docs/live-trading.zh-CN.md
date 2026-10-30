@@ -61,7 +61,7 @@ US 金额为 USD，HK 金额为 HKD。联合亏损上限必须为正数且不超
 
 ## 4. 限价单与状态核对
 
-![Live limit-order ticket, disabled](images/aegisquant-live-ticket-en.png)
+![Live Trading workspace and limit-order ticket, disabled](images/aegisquant-live-controls-en.png)
 
 已启用且后台运行时，在 **Explicit limit-order ticket** 填市场、股票代码、方向、整股/整手数量及原币限价，输入 `PLACE LIVE ORDER` 后提交。买入仍需通过完整前一交易日扫描、合格做多信号、品种、报价、新闻、现金、持仓和联合亏损检查。卖出只能处置本实盘账本拥有的持仓。
 
