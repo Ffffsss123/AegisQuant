@@ -23,6 +23,19 @@ Publication does not establish live readiness, completed execution acceptance or
 
 The actual English macOS **Live Trading** page, showing securities account configuration, validation, explicit enable and execution controls. Live execution is disabled and its worker is offline in this capture; no real order was submitted. The USD 1,500 sidebar amount belongs to the separate simulation budget, not live funds or account equity.
 
+
+### Live limit-order ticket
+
+![English live limit-order ticket](docs/images/aegisquant-live-ticket-en.png)
+
+The actual application’s order preparation and per-order confirmation panel. Live execution remains disabled in this capture; no real order was submitted.
+
+### Simulation overview and strategy status
+
+![English simulation overview and strategy status](docs/images/aegisquant-securities-console-en.png)
+
+The actual application’s simulation overview, showing historical scans and local simulation state. This illustrates strategy monitoring, not current quotes, live equity or real fills.
+
 ## Runtime workflow
 
 ```text
