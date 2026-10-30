@@ -44,27 +44,36 @@ class WorkspaceMode(unittest.TestCase):
                 with self.assertRaises(ValueError):self.c.live_action({'action':action})
             launch.assert_not_called()
         self.assertFalse((self.root/'data/trading/live/requests').exists())
-    def test_simulation_holdings_block_live_and_preserve_ledger(self):
+    def test_simulation_holdings_allow_live_and_preserve_ledger(self):
         self.c.switch_mode('simulation');self.state('paper.sqlite',positions={'US.A':{'qty':1}})
-        with self.assertRaisesRegex(ValueError,'holdings'):self.c.switch_mode('live')
-        self.assertEqual(self.c.mode(),'simulation')
+        self.c.switch_mode('live')
+        self.assertEqual(self.c.mode(),'live')
         from trading.desktop_server import ledger
         self.assertEqual(ledger(self.root/'data/trading/paper.sqlite')['positions']['US.A']['qty'],1)
-    def test_unknown_order_and_queued_intent_each_block_live(self):
+    def test_simulation_unknown_orders_and_queue_allow_live_without_mutation(self):
+        from trading.desktop_server import ledger
         self.c.switch_mode('simulation')
         for fields in ({'orders':{'a':{'status':'UNKNOWN'}}},{'queue':[{'side':'BUY','code':'US.A'}]}):
             self.state('paper.sqlite',**fields)
-            with self.assertRaises(ValueError):self.c.switch_mode('live')
-    def test_running_simulation_worker_blocks_live_even_when_local_ledger_flat(self):
+            before=ledger(self.root/'data/trading/paper.sqlite')
+            self.c.switch_mode('live');self.assertEqual(self.c.mode(),'live')
+            self.assertEqual(ledger(self.root/'data/trading/paper.sqlite'),before)
+            self.c.switch_mode('simulation')
+    def test_running_simulation_worker_allows_live_and_is_not_stopped(self):
         self.c.switch_mode('simulation');worker=Mock();worker.poll.return_value=None;self.c.jobs['strategy']=worker
-        with self.assertRaisesRegex(ValueError,'worker'):self.c.switch_mode('live')
-        worker.terminate.assert_not_called()
-    def test_legacy_simulation_activity_blocks_default_live_connections(self):
+        with patch('subprocess.Popen') as launch:self.c.switch_mode('live');launch.assert_not_called()
+        self.assertEqual(self.c.mode(),'live');self.assertTrue(self.c.running('strategy'))
+        worker.terminate.assert_not_called();worker.kill.assert_not_called()
+        # Real pending orders still prevent the reverse switch, even alongside SIM workers.
+        self.state('live/us.sqlite',env='REAL',orders={'real':{'status':'UNKNOWN'}})
+        with self.assertRaisesRegex(ValueError,'unknown'):self.c.switch_mode('simulation')
+        self.assertEqual(self.c.mode(),'live')
+    def test_legacy_simulation_activity_does_not_block_new_real_connection_requests(self):
         self.state('option_transport.sqlite',orders={'a':{'status':'INTENT'}})
         with patch('subprocess.Popen') as launch:
-            with self.assertRaisesRegex(ValueError,'unknown'):self.c.start('account')
-            with self.assertRaises(ValueError):self.c.live_action({'action':'prepare'})
-            launch.assert_not_called()
+            launch.return_value.pid=123;launch.return_value.poll.return_value=None
+            self.c.start('account');self.c.live_action({'action':'prepare'})
+            self.assertEqual(launch.call_count,2)
     def test_live_holding_or_active_worker_blocks_simulation(self):
         self.state('live/us.sqlite',env='REAL',positions={'US.A':{'qty':2}})
         with self.assertRaisesRegex(ValueError,'holdings'):self.c.switch_mode('simulation')
@@ -77,18 +86,19 @@ class WorkspaceMode(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'Pause or stop'):self.c.switch_mode('simulation')
         path.write_text(json.dumps({'enabled':True,'paused':True,'loss_latched':True}))
         original=path.read_bytes();self.c.switch_mode('simulation');self.assertEqual(path.read_bytes(),original)
-    def test_hk_held_or_unknown_reservation_cannot_be_released_by_mode_switch(self):
+    def test_hk_sim_reservation_does_not_block_live_and_cannot_be_released_by_switch(self):
         self.c.switch_mode('simulation');path=self.root/'data/trading/hk_reservations.sqlite';path.parent.mkdir(parents=True,exist_ok=True)
         with sqlite3.connect(path) as db:
             db.execute('CREATE TABLE holds (state TEXT)');db.execute("INSERT INTO holds VALUES('HELD')")
-        with self.assertRaisesRegex(ValueError,'reservations'):self.c.switch_mode('live')
+        self.c.switch_mode('live');self.assertEqual(self.c.mode(),'live')
         with sqlite3.connect(path) as db:self.assertEqual(db.execute('SELECT state FROM holds').fetchone()[0],'HELD')
-    def test_unknown_hk_claim_blocks_live(self):
+    def test_unknown_simulated_hk_claim_allows_live_and_is_preserved(self):
         self.c.switch_mode('simulation');path=self.root/'data/trading/hk_submissions.sqlite';path.parent.mkdir(parents=True,exist_ok=True)
         with sqlite3.connect(path) as db:
             db.execute('CREATE TABLE submissions (order_id TEXT,claimed_at TEXT)')
             db.execute("INSERT INTO submissions VALUES(NULL,'2026-10-31T00:00:00+00:00')")
-        with self.assertRaises(ValueError):self.c.switch_mode('live')
+        self.c.switch_mode('live')
+        with sqlite3.connect(path) as db:self.assertIsNone(db.execute('SELECT order_id FROM submissions').fetchone()[0])
     def test_corrupt_mode_and_unreadable_state_fail_closed(self):
         (self.data/'workspace_mode.json').write_text('{')
         with patch('subprocess.Popen') as launch:
@@ -96,7 +106,9 @@ class WorkspaceMode(unittest.TestCase):
             launch.assert_not_called()
         (self.data/'workspace_mode.json').unlink()
         self.c.switch_mode('simulation');path=self.root/'data/trading/paper.sqlite';path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'invalid')
-        with self.assertRaises(ValueError):self.c.switch_mode('live')
+        self.c.switch_mode('live')
+        live_path=self.root/'data/trading/live/us.sqlite';live_path.parent.mkdir(parents=True,exist_ok=True);live_path.write_bytes(b'invalid')
+        with self.assertRaises(ValueError):self.c.switch_mode('simulation')
     def test_live_status_omits_simulation_budget_and_signals(self):
         self.state('paper.sqlite',initial=500,positions={'US.SIM':{'qty':1}})
         status=self.c.status()

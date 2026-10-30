@@ -52,9 +52,6 @@ class Controller:
         return blockers(ROOT,target,self.running,ledger)
     def require_mode(self,target):
         if self.mode()!=target:raise ValueError('Select '+target+' connection mode first')
-        if target=='live':
-            problems=self.mode_blockers('live')
-            if problems:raise ValueError('Live connection blocked: '+'; '.join(problems))
     def switch_mode(self,target):
         from .live_trading import private_write
         if target not in ('live','simulation'):raise ValueError('Invalid workspace mode')
@@ -62,7 +59,7 @@ class Controller:
             problems=self.mode_blockers(target)
             if problems:raise ValueError('Mode unchanged: '+'; '.join(problems))
             private_write(DATA/'workspace_mode.json',dict(mode=target,updated_at=datetime.now(timezone.utc).isoformat()))
-        self.last_message=('REAL-only connections selected; verify, enable and start live execution separately' if target=='live'
+        self.last_message=('REAL connection path selected; existing simulation activity retained; enable and start live execution separately' if target=='live'
                            else 'SIMULATE-only connections selected; existing pause and loss latches remain unchanged')
         return dict(mode=target,connection_blockers=[])
     def workspace_status(self):

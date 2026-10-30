@@ -216,7 +216,7 @@ struct MainView: View {
                     Button {page=p} label:{Label(p.rawValue,systemImage:p.icon)}
                 }
                 Spacer()
-                Toggle("Simulation",isOn:Binding(get:{m.simulationEnabled},set:{m.setWorkspaceMode($0)})).toggleStyle(.checkbox).disabled(m.readOnly || m.busy || !m.connected).help("On: SIMULATE-only connections. Off: REAL-only connections. Switching does not enable trading or clear pauses.")
+                Toggle("Simulation",isOn:Binding(get:{m.simulationEnabled},set:{m.setWorkspaceMode($0)})).toggleStyle(.checkbox).disabled(m.readOnly || m.busy || !m.connected).help("On: SIMULATE requests. Off: REAL requests; existing simulation activity is retained. Leaving REAL mode requires resolving live activity. Switching does not enable trading.")
                 Button("Help"){showHelp.toggle()}.popover(isPresented:$showHelp,arrowEdge:.bottom){
                     VStack(alignment:.leading,spacing:12){
                         Text("AegisQuant Help").font(.headline)

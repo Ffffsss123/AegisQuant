@@ -2,7 +2,7 @@
 
 ## Select REAL-only connections first
 
-Uncheck **Simulation** in the toolbar and confirm **REAL only** in the status bar. This disables simulation connections through the desktop service; it does not bind, enable or submit a live order. If switching is blocked by an existing worker, holdings or unresolved records, reconcile and stop the original worker safely before retrying. Preserve unknown orders and reservations. Checking Simulation selects SIMULATE only and rejects REAL connection requests. Existing pauses, stops and loss latches are retained.
+Uncheck **Simulation** in the toolbar and confirm **REAL only** in the status bar. This selects REAL for new desktop connection requests; it does not bind, enable or submit a live order. Simulated holdings, unresolved orders and running simulation workers do not block this direction and remain untouched. The reverse switch to simulation is blocked while live workers, holdings, unresolved live orders or fees remain; reconcile and safely stop live activity first. Preserve all original records. Checking Simulation selects SIMULATE only and rejects REAL connection requests. Existing pauses, stops and loss latches are retained.
 
 
 
