@@ -67,3 +67,12 @@ Validation: 38 focused desktop/mode/quote tests and 836 protection regression te
 ### Asymmetric mode transition · 2026-10-31
 
 The user explicitly allowed entering REAL connection mode regardless of existing simulation activity. The mode switch and the REAL request dispatcher therefore no longer gate on simulation ledgers, claims, reservations or workers. Existing simulation workers are not killed and original unknown orders/holds are not released. Live-to-simulation protections remain intact. Focused tests verify both transition directions, continued simulated worker liveness, unchanged simulated holdings/unknown orders/HK holds, REAL connection dispatch alongside simulated activity, and rejection of the reverse switch for pending REAL orders or workers. First-live admission and enable requirements are unchanged.
+
+
+### Live, candles and AI integration audit · 2026-10-31
+
+A passing protection suite does not establish live end-to-end readiness. The execution engine implements opt-in daily-trend buying and owned-position exits, with automatic entries defaulting to false. It consumes existing US/HK scan files and does not collect daily candles itself.
+
+**Open integration gap:** `scan`, `hk_scan` and `hk_catalog` are quote-only collectors but are still classified in `SIMULATION_JOBS`. Consequently the desktop REAL mode rejects launching them. A common read-only data preparation path must be wired before claiming a complete native live-data workflow. Existing stale/incomplete scan guards must remain in place. Separate collector CLIs exist, but they are not a complete desktop workflow.
+
+The native application has a return line chart, not an instrument candlestick chart. AI research exists only in `trading.ai_analysis`: a hidden key prompt or `AEGIS_AI_API_KEY`, a Chat Completions-compatible request, and text output. There is no native key/settings panel, candle-to-AI analysis pipeline or AI-to-order integration. Its provider tests use fakes; real provider credentials and successful live calls are not established by this audit. No account connection, live enable, order or paid AI request was performed during verification.
