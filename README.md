@@ -143,7 +143,17 @@ open AegisQuant.app
 
 The build produces `AegisQuant.app`. A normal launch connects the local backend and manages tasks according to local configuration. Configure simulation accounts and permissions first. Launching with `AEGIS_READ_ONLY=1` prevents this app from starting its backend or sending action requests; an existing status service is required to display data. Closing the window does not stop background processes.
 
-This sanitized source snapshot excludes runtime databases, balances, trade history, credentials, dependencies and built apps. Other separate tools retained in the repository do not participate in the securities console's connection or execution.
+This sanitized source snapshot excludes runtime databases, balances, trade history, credentials, dependencies and built apps.
+
+### macOS shortcuts
+
+- `Launch_AegisQuant.command` — open the securities console after building it.
+- `Check_API_Access.command` — run broker API readiness diagnostics.
+- `Check_Connection.command` — read-only quote/account connection checks.
+- `Show_Weekly_Returns.command` — display recorded strategy returns.
+- `Run_Example_Backtest.command` — run the synthetic example backtest.
+
+The top-level Python files are the securities connection, backtest, validation and reporting tools. Their last-change dates in GitHub identify their latest individual commits; unchanged files remain valid parts of the current version.
 
 ## Verification
 

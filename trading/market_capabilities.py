@@ -1,8 +1,7 @@
 """Declared securities execution scope; product slots are not trading permission.
 
-FUTURE in simulation_slots is an accounting category only. Binance commodity
-perpetuals belong to the separate binance_trader application and never confer
-execution capability on this securities system.
+FUTURE in simulation_slots is an accounting category only. Research or
+reserved slots never confer securities execution capability.
 """
 import json
 

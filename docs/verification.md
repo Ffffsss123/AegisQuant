@@ -14,17 +14,20 @@ This review checks the published source, documented workflows and screenshots. I
 - Distinguished stopped and loss-latched states from merely armed or manually paused states in the English UI.
 - Kept partial maintenance failures visible as **needs attention**, rather than reporting them as successful completion.
 - Removed unreferenced historical Chinese-console and capabilities-poster images. Current documentation uses captures of the actual English securities console and disabled live controls.
-- Replaced an ambiguous credential-shaped unit-test fixture with an explicitly invalid fixture string, deduplicated ignore rules and checked the tracked source for local account bindings, machine paths, runtime databases and private-key/token patterns.
+- Deduplicated ignore rules and checked the tracked securities source for local account bindings, machine paths, runtime databases and private-key/token patterns. Unrelated legacy tools were removed from the current distribution.
 
 ## Validation
 
 ```sh
 python -m unittest discover -s tests -q
-python -m unittest binance_trader.tests.test_ai_news -q
 ```
 
-The securities protection suite passed **819 tests**. The separate AI fixture/redaction suite passed **31 tests** after its fixture cleanup. Cross-market fault tests cover manual and automatic owned-position exits, blocked new buying, due cancellation, strict own-market failure rejection, and a heartbeat that continues while maintenance is waiting.
+The securities protection suite passed **819 tests**. Cross-market fault tests cover manual and automatic owned-position exits, blocked new buying, due cancellation, strict own-market failure rejection, and a heartbeat that continues while maintenance is waiting.
 
 Relative documentation links and screenshot references were checked. English and Chinese copyright/attribution notices remain present. The public export excludes runtime ledgers, credentials and built applications; deployment must create its own local account binding, simulation evidence and protection fingerprint.
 
 Current screenshots show a read-only capture session with live execution **disabled** and its worker **offline**. USD 1,500 in the sidebar belongs to the historical simulation configuration. Options remain simulation-only, futures remain research-only, and the ATR swing strategy has not been enabled for live execution.
+
+## Securities-only distribution cleanup
+
+The public repository now contains the securities console and its supporting tools. The unrelated exchange application and its launcher were removed from the current branch; original local files and a backup remain outside the public export. Five macOS shortcuts use English names and prompts. Obsolete untracked preview images were excluded. Top-level securities Python tools are intentionally retained. GitHub displays the last commit for each individual file, so an older date on an unchanged tool is expected. Historical Git commits are preserved.

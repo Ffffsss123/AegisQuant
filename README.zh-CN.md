@@ -149,7 +149,17 @@ open AegisQuant.app
 
 构建生成 `AegisQuant.app`。正常启动会连接本机后台并按本地配置管理任务；先完成模拟环境配置和权限检查。`AEGIS_READ_ONLY=1` 启动应用可禁止其启动后台和发送操作请求，但需要已有状态服务才能显示数据。关闭窗口不会自动停止已运行的后台。
 
-这是脱敏源码快照，不包含运行数据库、余额、成交历史、凭据、依赖目录或已构建 App。仓库保留的其他独立工具不参与证券控制台的连接和执行。
+这是脱敏源码快照，不包含运行数据库、余额、成交历史、凭据、依赖目录或已构建 App。
+
+### Mac 英文启动文件
+
+- `Launch_AegisQuant.command`：构建后打开证券控制台。
+- `Check_API_Access.command`：核验券商 API 接入。
+- `Check_Connection.command`：只读检查行情与账户连接。
+- `Show_Weekly_Returns.command`：查看已记录策略收益。
+- `Run_Example_Backtest.command`：运行人工合成数据回测。
+
+根目录 Python 文件是证券连接、回测、验证及收益统计工具，应继续保留。GitHub 文件列表右侧显示各文件最后一次修改的提交和时间，不代表该文件不属于当前版本。
 
 ## 检查记录
 
