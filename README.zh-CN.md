@@ -19,9 +19,9 @@ AegisQuant 采用证券 API 适配的接入方式，不以某一家交易平台�
 
 ## 英文证券控制台
 
-![AegisQuant securities console](docs/images/aegisquant-securities-console-en.png)
+![英文实盘控制页面，执行未启用](docs/images/aegisquant-live-controls-en.png)
 
-本机实际 Mac 证券控制台的英文界面，读取现有本地模拟账本和历史扫描记录。截图采用只读状态服务，交易工作进程和证券网关未运行；未恢复策略、未提交订单。画面中的扫描日期是历史信号日期，1,500 USD 是配置的模拟预算，不是真实账户权益，也不代表当前券商在线或验收通过。原始诊断和新闻原文保留其来源语言。
+实际 macOS 软件的英文 **Live Trading** 页面，展示证券实盘账户配置、验证、启用和执行控制。截图时实盘执行未启用、工作进程离线，没有提交真实订单。侧栏 1,500 USD 是独立的模拟预算，不是实盘资金或账户权益。
 
 ## 基本运行逻辑
 
@@ -87,7 +87,7 @@ AegisQuant 采用证券 API 适配的接入方式，不以某一家交易平台�
 
 请按 [完整实盘操作说明](docs/live-trading.zh-CN.md) 配置。实盘接原始日线趋势引擎；模拟环境的 ATR 波段引擎没有直接升级为实盘。
 
-![实盘控制页面，当前关闭](docs/images/aegisquant-live-controls-en.png)
+![英文实盘限价下单面板，执行未启用](docs/images/aegisquant-live-ticket-en.png)
 
 ## 连接自己的证券 API
 

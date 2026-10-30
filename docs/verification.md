@@ -31,3 +31,8 @@ Current screenshots show a read-only capture session with live execution **disab
 ## Securities-only distribution cleanup
 
 The public repository now contains the securities console and its supporting tools. The unrelated exchange application and its launcher were removed from the current branch; original local files and a backup remain outside the public export. Five macOS shortcuts use English names and prompts. Obsolete untracked preview images were excluded. Top-level securities Python tools are intentionally retained. GitHub displays the last commit for each individual file, so an older date on an unchanged tool is expected. Historical Git commits are preserved.
+
+
+### Homepage screenshot selection
+
+The first screenshot in all three README editions now shows the actual English Live Trading controls; the live execution section shows the actual limit-order ticket. The simulation Overview is no longer the homepage screenshot. Both captures retain the disabled/offline state and do not claim a connected REAL account or real fills.

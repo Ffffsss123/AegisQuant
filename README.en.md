@@ -19,9 +19,9 @@ Publication does not establish live readiness, completed execution acceptance or
 
 ## Securities console
 
-![AegisQuant securities console](docs/images/aegisquant-securities-console-en.png)
+![Live Trading controls in the English macOS application, execution disabled](docs/images/aegisquant-live-controls-en.png)
 
-The actual English macOS securities console displaying existing local simulation ledgers and historical scan records. The capture uses a read-only status service; the broker gateway and trading workers are offline. No strategy was resumed and no order submitted. The displayed scan date is historical; USD 1,500 is a configured simulation budget, not live account equity or proof of broker connectivity or acceptance. Original diagnostics and news retain their source language.
+The actual English macOS **Live Trading** page, showing securities account configuration, validation, explicit enable and execution controls. Live execution is disabled and its worker is offline in this capture; no real order was submitted. The USD 1,500 sidebar amount belongs to the separate simulation budget, not live funds or account equity.
 
 ## Runtime workflow
 
@@ -88,7 +88,7 @@ The **Reconcile once** operation services reconciliation and due cancellations o
 
 Follow the [step-by-step live guide](docs/live-trading.md) before any account operation. The live path uses the original daily-trend engine; the simulation ATR swing engine has not been promoted to live execution.
 
-![Live Trading controls, disabled](docs/images/aegisquant-live-controls-en.png)
+![Live limit-order ticket in the English application, execution disabled](docs/images/aegisquant-live-ticket-en.png)
 
 ## Connect your securities API
 
